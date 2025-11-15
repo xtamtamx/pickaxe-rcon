@@ -8,16 +8,9 @@ set -e
 IMAGE_NAME="xtamtamx/pickaxe-rcon"  # Change to your Docker Hub username
 VERSION="${1:-latest}"
 
-echo "🪓  Building and Publishing Pickaxe RCON"
+echo "⛏️  Building and Publishing Pickaxe RCON"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-# Check if logged in to Docker Hub
-if ! docker info | grep -q "Username"; then
-    echo "⚠️  Not logged in to Docker Hub"
-    echo "Please run: docker login"
-    exit 1
-fi
 
 # Build for multiple platforms
 echo "📦 Building multi-platform image..."

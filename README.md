@@ -6,7 +6,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/xtamtamx/pickaxe-rcon)](https://github.com/xtamtamx/pickaxe-rcon/stargazers)
 [![License](https://img.shields.io/github/license/xtamtamx/pickaxe-rcon)](LICENSE)
 
-![Screenshot](https://via.placeholder.com/800x400?text=Admin+Panel+Screenshot)
+![Pickaxe RCON Admin Panel](screenshots/main-console.png)
 
 ## ✨ Features
 
