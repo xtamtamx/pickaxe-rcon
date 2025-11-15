@@ -4,7 +4,7 @@
 
 set -e
 
-echo "🪓  Pickaxe RCON - GitHub Setup"
+echo "⛏️  Pickaxe RCON - GitHub Setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Before running this script:"
@@ -57,7 +57,7 @@ git add .
 
 echo ""
 echo "✅ Creating initial commit..."
-git commit -m "🪓 Initial release: Pickaxe RCON v1.0.0
+git commit -m "⛏️ Initial release: Pickaxe RCON v1.0.0
 
 A powerful, user-friendly web-based admin panel for Minecraft Bedrock Edition servers.
 
