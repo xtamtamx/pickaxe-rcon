@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="mc-alert-{{ category }}" style="margin-bottom: 20px;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="mc-panel">
+    <div class="mc-panel-header">
+        🔧 Server Connection Settings
+    </div>
+    <div class="mc-panel-body">
+        <p style="color: #aaa; margin-bottom: 20px;">
+            Configure how the admin panel connects to your Minecraft Bedrock server.
+            Changes take effect immediately.
+        </p>
+
+        <form method="POST" action="/api/connection-settings">
+            <h3 style="color: #7cbd1e;">Connection Details</h3>
+
+            <div class="mc-form-group">
+                <label for="connection_type">Connection Type:</label>
+                <select id="connection_type" name="connection_type" class="mc-input" required>
+                    <option value="ssh" {% if config.server.connection_type == 'ssh' %}selected{% endif %}>
+                        SSH (Remote Server)
+                    </option>
+                    <option value="local" {% if config.server.connection_type == 'local' %}selected{% endif %}>
+                        Local (Same Machine)
+                    </option>
+                </select>
+            </div>
+
+            <div id="ssh-fields" style="{% if config.server.connection_type != 'ssh' %}display: none;{% endif %}">
+                <div class="mc-form-group">
+                    <label for="ssh_host">SSH Host (IP Address):</label>
+                    <input type="text" id="ssh_host" name="ssh_host" class="mc-input"
+                           value="{{ config.server.ssh_host }}" placeholder="192.168.1.100">
+                    <small style="color: #888;">The IP address of the machine running your Minecraft server</small>
+                </div>
+
+                <div class="mc-form-group">
+                    <label for="ssh_user">SSH Username:</label>
+                    <input type="text" id="ssh_user" name="ssh_user" class="mc-input"
+                           value="{{ config.server.ssh_user }}" placeholder="username">
+                    <small style="color: #888;">Username to SSH into the server</small>
+                </div>
+            </div>
+
+            <div class="mc-form-group">
+                <label for="container_name">Minecraft Container Name:</label>
+                <input type="text" id="container_name" name="container_name" class="mc-input"
+                       value="{{ config.server.container_name }}" placeholder="minecraft-bedrock-server" required>
+                <small style="color: #888;">Name of your Docker container running Minecraft Bedrock</small>
+            </div>
+
+            <div class="mc-form-group">
+                <label for="server_host">Server Host (for RCON):</label>
+                <input type="text" id="server_host" name="server_host" class="mc-input"
+                       value="{{ config.server.server_host }}" placeholder="192.168.1.100" required>
+                <small style="color: #888;">IP address where the Minecraft server is accessible</small>
+            </div>
+
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #555;">
+                <button type="submit" class="mc-button mc-button-primary">
+                    💾 Save Connection Settings
+                </button>
+                <button type="button" class="mc-button" onclick="testConnection()">
+                    🔍 Test Connection
+                </button>
+            </div>
+        </form>
+
+        <div id="connection-test-result" style="margin-top: 20px;"></div>
+    </div>
+</div>
+
+<div class="mc-panel" style="margin-top: 20px;">
+    <div class="mc-panel-header">
+        🗺️ Map Server Settings
+    </div>
+    <div class="mc-panel-body">
+        <p style="color: #aaa; margin-bottom: 20px;">
+            Configure an optional map visualization server (uNmINeD, etc.)
+        </p>
+
+        <form method="POST" action="/api/map-settings">
+            <div class="mc-form-group">
+                <label>
+                    <input type="checkbox" id="map_enabled" name="map_enabled" {% if config.map.enabled %}checked{% endif %}>
+                    Enable Map Server
+                </label>
+            </div>
+
+            <div id="map-fields" style="{% if not config.map.enabled %}display: none;{% endif %}">
+                <div class="mc-form-group">
+                    <label for="map_type">Map Type:</label>
+                    <select id="map_type" name="map_type" class="mc-input">
+                        <option value="unmined" {% if config.map.type == 'unmined' %}selected{% endif %}>uNmINeD</option>
+                        <option value="chunkbase" {% if config.map.type == 'chunkbase' %}selected{% endif %}>Chunkbase</option>
+                        <option value="custom" {% if config.map.type == 'custom' %}selected{% endif %}>Custom URL</option>
+                    </select>
+                </div>
+
+                <div class="mc-form-group">
+                    <label for="map_url">Map URL:</label>
+                    <input type="url" id="map_url" name="map_url" class="mc-input"
+                           value="{{ config.map.url }}" placeholder="http://192.168.86.148:8080">
+                    <small style="color: #888;">Full URL to your map server</small>
+                </div>
+            </div>
+
+            <button type="submit" class="mc-button mc-button-primary">
+                💾 Save Map Settings
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="mc-panel" style="margin-top: 20px;">
+    <div class="mc-panel-header">
+        🔐 Admin Credentials
+    </div>
+    <div class="mc-panel-body">
+        <form method="POST" action="/api/admin-credentials">
+            <div class="mc-form-group">
+                <label for="admin_user">Admin Username:</label>
+                <input type="text" id="admin_user" name="admin_user" class="mc-input"
+                       value="{{ config.admin.username }}" required>
+            </div>
+
+            <div class="mc-form-group">
+                <label for="current_password">Current Password:</label>
+                <input type="password" id="current_password" name="current_password" class="mc-input"
+                       placeholder="Enter current password" required>
+            </div>
+
+            <div class="mc-form-group">
+                <label for="new_password">New Password:</label>
+                <input type="password" id="new_password" name="new_password" class="mc-input"
+                       placeholder="Leave blank to keep current">
+                <small style="color: #888;">Minimum 6 characters</small>
+            </div>
+
+            <div class="mc-form-group">
+                <label for="new_password_confirm">Confirm New Password:</label>
+                <input type="password" id="new_password_confirm" name="new_password_confirm" class="mc-input"
+                       placeholder="Re-enter new password">
+            </div>
+
+            <button type="submit" class="mc-button mc-button-primary">
+                💾 Update Credentials
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+// Toggle SSH fields based on connection type
+const connectionType = document.getElementById('connection_type');
+const sshFields = document.getElementById('ssh-fields');
+const sshHost = document.getElementById('ssh_host');
+const sshUser = document.getElementById('ssh_user');
+
+function toggleSSHFields() {
+    if (connectionType.value === 'ssh') {
+        sshFields.style.display = 'block';
+        sshHost.required = true;
+        sshUser.required = true;
+    } else {
+        sshFields.style.display = 'none';
+        sshHost.required = false;
+        sshUser.required = false;
+    }
+}
+
+connectionType.addEventListener('change', toggleSSHFields);
+
+// Toggle map fields based on enable checkbox
+const mapEnabled = document.getElementById('map_enabled');
+const mapFields = document.getElementById('map-fields');
+const mapUrl = document.getElementById('map_url');
+
+function toggleMapFields() {
+    if (mapEnabled.checked) {
+        mapFields.style.display = 'block';
+        mapUrl.required = true;
+    } else {
+        mapFields.style.display = 'none';
+        mapUrl.required = false;
+    }
+}
+
+mapEnabled.addEventListener('change', toggleMapFields);
+
+// Test connection
+function testConnection() {
+    const result = document.getElementById('connection-test-result');
+    result.innerHTML = '<div class="mc-alert-info">Testing connection...</div>';
+
+    fetch('/api/test-connection')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                result.innerHTML = '<div class="mc-alert-success">✓ ' + data.message + '</div>';
+            } else {
+                result.innerHTML = '<div class="mc-alert-error">✗ ' + data.message + '</div>';
+            }
+        })
+        .catch(error => {
+            result.innerHTML = '<div class="mc-alert-error">Error testing connection: ' + error + '</div>';
+        });
+}
+
+// Form validation
+document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        if (form.action.includes('admin-credentials')) {
+            const newPass = document.getElementById('new_password').value;
+            const confirmPass = document.getElementById('new_password_confirm').value;
+
+            if (newPass && newPass !== confirmPass) {
+                e.preventDefault();
+                alert('New passwords do not match!');
+                return false;
+            }
+        }
+    });
+});
+</script>
+
+<style>
+.mc-alert-success {
+    background: #2d5016;
+    border: 1px solid #7cbd1e;
+    color: #7cbd1e;
+    padding: 12px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.mc-alert-error {
+    background: #5c1a1a;
+    border: 1px solid #d84315;
+    color: #ff6b6b;
+    padding: 12px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.mc-alert-info {
+    background: #1a3a5c;
+    border: 1px solid #4a90e2;
+    color: #4a90e2;
+    padding: 12px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+</style>
+{% endblock %}

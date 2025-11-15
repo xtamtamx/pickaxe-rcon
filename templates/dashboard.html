@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 400px; gap: 20px;">
+    <div>
+        <div class="mc-panel">
+            <div class="mc-panel-header">
+                📟 Server Console
+            </div>
+            <div style="padding: 0;">
+                <div id="console" class="mc-console"></div>
+                <div style="display: flex; padding: 16px; background-color: #666;">
+                    <input type="text" id="command-input" class="mc-input" 
+                           placeholder="Enter command..." autofocus 
+                           style="flex: 1; margin-right: 8px;">
+                    <button class="mc-button mc-button-green" onclick="sendCommand()">
+                        ➤ Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div>
+        <div class="mc-panel" style="margin-bottom: 20px;">
+            <div class="mc-panel-header">
+                💚 Server Status
+            </div>
+            <div class="mc-panel-body" style="text-align: center;">
+                <div id="server-status">
+                    <p style="font-size: 24px;">Status: <span id="status-text" class="mc-badge mc-badge-info">Checking...</span></p>
+                    <p class="player-count">👥 <span id="player-count">-</span></p>
+                </div>
+                <button class="mc-button" onclick="updateStatus()" style="width: 100%; margin-top: 16px;">
+                    🔄 Refresh
+                </button>
+                <button class="mc-button mc-button-blue" onclick="testConnection()" style="width: 100%; margin-top: 8px;">
+                    🔧 Test Connection
+                </button>
+            </div>
+        </div>
+        
+        <div class="mc-panel" style="margin-bottom: 20px;">
+            <div class="mc-panel-header">
+                ⚡ Quick Actions
+            </div>
+            <div class="mc-panel-body">
+                <div style="display: grid; gap: 8px;">
+                    <button class="mc-button mc-button-green" onclick="quickAction('save')">
+                        💾 Save World
+                    </button>
+                    <button class="mc-button mc-button-blue" onclick="sendCommand('list')">
+                        👥 List Players
+                    </button>
+                    <button class="mc-button" onclick="quickAction('time_day')">
+                        ☀️ Set Day
+                    </button>
+                    <button class="mc-button" onclick="quickAction('time_night')">
+                        🌙 Set Night
+                    </button>
+                    <button class="mc-button" onclick="quickAction('weather_clear')">
+                        🌤️ Clear Weather
+                    </button>
+                    <button class="mc-button" onclick="quickAction('weather_rain')">
+                        🌧️ Make it Rain
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mc-panel">
+            <div class="mc-panel-header">
+                📋 Command Reference
+            </div>
+            <div class="mc-panel-body" style="font-size: 18px;">
+                <div style="margin-bottom: 12px;">
+                    <strong style="color: #7cbd1e;">👤 Player Commands:</strong><br>
+                    <div style="padding-left: 20px; color: #ddd;">
+                        • op [player]<br>
+                        • deop [player]<br>
+                        • kick [player] [reason]<br>
+                        • whitelist add [player]
+                    </div>
+                </div>
+                <div>
+                    <strong style="color: #7cbd1e;">🌍 World Commands:</strong><br>
+                    <div style="padding-left: 20px; color: #ddd;">
+                        • save-all<br>
+                        • time set [value]<br>
+                        • weather [type]<br>
+                        • gamerule [rule] [value]
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const socket = io();
+let commandHistory = [];
+let historyIndex = -1;
+
+socket.on('connect', function() {
+    addConsoleMessage('Connected to server console', 'system');
+    updateStatus();
+});
+
+socket.on('console_output', function(data) {
+    if (data.command) {
+        addConsoleMessage('> ' + data.command, 'command');
+    }
+    addConsoleMessage(data.response, data.success ? 'response' : 'error');
+});
+
+function addConsoleMessage(message, type = 'response') {
+    const console = document.getElementById('console');
+    const line = document.createElement('div');
+    line.className = 'console-line console-' + type;
+    line.textContent = message;
+    console.appendChild(line);
+    console.scrollTop = console.scrollHeight;
+}
+
+function sendCommand(cmd) {
+    const input = document.getElementById('command-input');
+    const command = cmd || input.value.trim();
+    
+    if (!command) return;
+    
+    // Add to history
+    commandHistory.push(command);
+    historyIndex = commandHistory.length;
+    
+    // Send via HTTP (could also use WebSocket)
+    fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: command })
+    });
+    
+    if (!cmd) {
+        input.value = '';
+        input.focus();
+    }
+}
+
+function quickAction(action) {
+    fetch('/api/quick/' + action)
+        .then(response => response.json())
+        .then(data => {
+            if (data.response) {
+                addConsoleMessage(data.response, data.success ? 'response' : 'error');
+            }
+        });
+}
+
+function updateStatus() {
+    fetch('/api/status')
+        .then(response => response.json())
+        .then(data => {
+            const statusBadge = document.getElementById('status-text');
+            const playerCount = document.getElementById('player-count');
+            const statusDiv = document.getElementById('server-status');
+            
+            if (data.online) {
+                statusBadge.className = 'mc-badge mc-badge-success';
+                statusBadge.textContent = 'Online';
+                playerCount.textContent = `${data.players}/${data.max_players}`;
+            } else {
+                statusBadge.className = 'mc-badge mc-badge-danger';
+                statusBadge.textContent = 'Offline';
+                playerCount.textContent = '-';
+                
+                // Show error details
+                if (data.error) {
+                    let errorMsg = data.error;
+                    if (data.error.includes('Connection refused')) {
+                        errorMsg = `Cannot connect to RCON port ${data.port || 25575}. Please verify:
+• Server is running at ${data.host || '192.168.86.149'}
+• RCON is enabled in server.properties
+• RCON port is ${data.port || 25575}
+• No firewall is blocking the connection`;
+                    }
+                    addConsoleMessage('Connection Error: ' + errorMsg, 'error');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Status check failed:', error);
+            const statusBadge = document.getElementById('status-text');
+            statusBadge.className = 'mc-badge mc-badge-danger';
+            statusBadge.textContent = 'Error';
+        });
+}
+
+// Command history navigation
+document.getElementById('command-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        sendCommand();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIndex > 0) {
+            historyIndex--;
+            this.value = commandHistory[historyIndex];
+        }
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIndex < commandHistory.length - 1) {
+            historyIndex++;
+            this.value = commandHistory[historyIndex];
+        } else {
+            historyIndex = commandHistory.length;
+            this.value = '';
+        }
+    }
+});
+
+function testConnection() {
+    addConsoleMessage('Testing Bedrock console connection...', 'system');
+    fetch('/api/test-console')
+        .then(response => response.json())
+        .then(data => {
+            addConsoleMessage(`Testing connection to ${data.host}:${data.port}`, 'system');
+            
+            // Show each test result
+            for (const [test, result] of Object.entries(data.tests)) {
+                const status = result.success ? '✓' : '✗';
+                const type = result.success ? 'response' : 'error';
+                addConsoleMessage(`${status} ${test}: ${result.message}`, type);
+            }
+            
+            if (!data.success) {
+                addConsoleMessage('\nPlease check:', 'system');
+                addConsoleMessage('• Server is running at ' + data.host, 'system');
+                addConsoleMessage('• RCON is enabled in server.properties', 'system');
+                addConsoleMessage('• RCON port is ' + data.port, 'system');
+                addConsoleMessage('• RCON password matches', 'system');
+            }
+        })
+        .catch(error => {
+            addConsoleMessage('Test failed: ' + error, 'error');
+        });
+}
+
+// Update status every 10 seconds
+setInterval(updateStatus, 10000);
+</script>
+{% endblock %}

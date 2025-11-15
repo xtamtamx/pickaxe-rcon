@@ -1,0 +1,674 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <div class="mc-panel">
+        <div class="mc-panel-header">
+            ⚙️ Server Settings
+        </div>
+        <div class="mc-panel-body">
+            <div id="loading" style="text-align: center; padding: 20px;">
+                <p>Loading server properties...</p>
+            </div>
+
+            <form id="settings-form" style="display: none;">
+                <h3 style="color: #7cbd1e; margin-top: 0;">Basic Settings</h3>
+
+                <div class="form-group">
+                    <label>Server Name</label>
+                    <input type="text" id="server-name" class="mc-input" placeholder="My Bedrock Server">
+                </div>
+
+                <div class="form-group">
+                    <label>World Seed</label>
+                    <input type="text" id="level-seed" class="mc-input" placeholder="Leave empty for random">
+                    <small style="color: #aaa;">Set seed for world generation (requires restart)</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Difficulty</label>
+                    <select id="difficulty" class="mc-input">
+                        <option value="peaceful">Peaceful (No hostile mobs)</option>
+                        <option value="easy">Easy</option>
+                        <option value="normal">Normal</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Game Mode</label>
+                    <select id="gamemode" class="mc-input">
+                        <option value="survival">Survival</option>
+                        <option value="creative">Creative</option>
+                        <option value="adventure">Adventure</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Max Players</label>
+                    <input type="number" id="max-players" class="mc-input" min="1" max="100" value="10">
+                </div>
+
+                <h3 style="color: #7cbd1e; margin-top: 30px;">Gameplay Settings</h3>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="allow-cheats" style="width: auto; margin-right: 8px;">
+                        Allow Cheats
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="force-gamemode" style="width: auto; margin-right: 8px;">
+                        Force Gamemode (Players use server's gamemode)
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Player Idle Timeout (minutes)</label>
+                    <input type="number" id="player-idle-timeout" class="mc-input" min="0" value="30">
+                    <small style="color: #aaa;">0 = disabled</small>
+                </div>
+
+                <h3 style="color: #7cbd1e; margin-top: 30px;">Performance Settings</h3>
+
+                <div class="form-group">
+                    <label>View Distance (chunks)</label>
+                    <input type="number" id="view-distance" class="mc-input" min="5" max="64" value="32">
+                </div>
+
+                <div class="form-group">
+                    <label>Tick Distance</label>
+                    <input type="number" id="tick-distance" class="mc-input" min="4" max="12" value="4">
+                </div>
+
+                <h3 style="color: #7cbd1e; margin-top: 30px;">Game Rules</h3>
+
+                <!-- Essential Gamerules -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px;">
+                            Show Coordinates • <span id="showcoordinates-status" style="color: #aaa;">Loading...</span>
+                        </label>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="showcoordinates-on" class="mc-button" onclick="setGamerule('showcoordinates', 'true')" style="flex: 1;">
+                                📍 Show
+                            </button>
+                            <button type="button" id="showcoordinates-off" class="mc-button" onclick="setGamerule('showcoordinates', 'false')" style="flex: 1;">
+                                ✗ Hide
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="display: block; margin-bottom: 8px;">
+                            PVP • <span id="pvp-status" style="color: #aaa;">Loading...</span>
+                        </label>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="pvp-on" class="mc-button" onclick="setGamerule('pvp', 'true')" style="flex: 1;">
+                                ⚔️ Enable
+                            </button>
+                            <button type="button" id="pvp-off" class="mc-button" onclick="setGamerule('pvp', 'false')" style="flex: 1;">
+                                🛡️ Disable
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="display: block; margin-bottom: 8px;">
+                            Keep Inventory • <span id="keepInventory-status" style="color: #aaa;">Loading...</span>
+                        </label>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="keepInventory-on" class="mc-button" onclick="setGamerule('keepInventory', 'true')" style="flex: 1;">
+                                ✓ Keep
+                            </button>
+                            <button type="button" id="keepInventory-off" class="mc-button" onclick="setGamerule('keepInventory', 'false')" style="flex: 1;">
+                                ✗ Lose
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="display: block; margin-bottom: 8px;">
+                            Mob Griefing • <span id="mobGriefing-status" style="color: #aaa;">Loading...</span>
+                        </label>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="mobGriefing-on" class="mc-button" onclick="setGamerule('mobGriefing', 'true')" style="flex: 1;">
+                                ✓ Allow
+                            </button>
+                            <button type="button" id="mobGriefing-off" class="mc-button" onclick="setGamerule('mobGriefing', 'false')" style="flex: 1;">
+                                ✗ Prevent
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Show More Button -->
+                <div style="margin-bottom: 16px;">
+                    <button type="button" class="mc-button" onclick="toggleAdvancedRules()" style="width: 100%;">
+                        <span id="advanced-toggle-text">▼ Show Advanced Rules</span>
+                    </button>
+                </div>
+
+                <!-- Advanced Gamerules (Hidden by default) -->
+                <div id="advanced-rules" style="display: none; max-height: 400px; overflow-y: auto; border: 2px solid #555; padding: 16px; background: #6a6a6a; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Fire Spread • <span id="doFireTick-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="doFireTick-on" class="mc-button" onclick="setGamerule('doFireTick', 'true')" style="flex: 1;">
+                                    🔥 Enable
+                                </button>
+                                <button type="button" id="doFireTick-off" class="mc-button" onclick="setGamerule('doFireTick', 'false')" style="flex: 1;">
+                                    ❄️ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Death Messages • <span id="showDeathMessages-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="showDeathMessages-on" class="mc-button" onclick="setGamerule('showDeathMessages', 'true')" style="flex: 1;">
+                                    ✓ Show
+                                </button>
+                                <button type="button" id="showDeathMessages-off" class="mc-button" onclick="setGamerule('showDeathMessages', 'false')" style="flex: 1;">
+                                    ✗ Hide
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Natural Regen • <span id="naturalRegeneration-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="naturalRegeneration-on" class="mc-button" onclick="setGamerule('naturalRegeneration', 'true')" style="flex: 1;">
+                                    ✓ Enable
+                                </button>
+                                <button type="button" id="naturalRegeneration-off" class="mc-button" onclick="setGamerule('naturalRegeneration', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Daylight Cycle • <span id="dodaylightcycle-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="dodaylightcycle-on" class="mc-button" onclick="setGamerule('dodaylightcycle', 'true')" style="flex: 1;">
+                                    ☀️ Enable
+                                </button>
+                                <button type="button" id="dodaylightcycle-off" class="mc-button" onclick="setGamerule('dodaylightcycle', 'false')" style="flex: 1;">
+                                    🌙 Freeze
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Weather Cycle • <span id="doweathercycle-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="doweathercycle-on" class="mc-button" onclick="setGamerule('doweathercycle', 'true')" style="flex: 1;">
+                                    ⛈️ Enable
+                                </button>
+                                <button type="button" id="doweathercycle-off" class="mc-button" onclick="setGamerule('doweathercycle', 'false')" style="flex: 1;">
+                                    ☀️ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Mob Spawning • <span id="domobspawning-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="domobspawning-on" class="mc-button" onclick="setGamerule('domobspawning', 'true')" style="flex: 1;">
+                                    👾 Enable
+                                </button>
+                                <button type="button" id="domobspawning-off" class="mc-button" onclick="setGamerule('domobspawning', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Entity Drops • <span id="doentitydrops-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="doentitydrops-on" class="mc-button" onclick="setGamerule('doentitydrops', 'true')" style="flex: 1;">
+                                    ✓ Enable
+                                </button>
+                                <button type="button" id="doentitydrops-off" class="mc-button" onclick="setGamerule('doentitydrops', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Tile Drops • <span id="dotiledrops-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="dotiledrops-on" class="mc-button" onclick="setGamerule('dotiledrops', 'true')" style="flex: 1;">
+                                    ✓ Enable
+                                </button>
+                                <button type="button" id="dotiledrops-off" class="mc-button" onclick="setGamerule('dotiledrops', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Drowning Damage • <span id="drowningdamage-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="drowningdamage-on" class="mc-button" onclick="setGamerule('drowningdamage', 'true')" style="flex: 1;">
+                                    ✓ Enable
+                                </button>
+                                <button type="button" id="drowningdamage-off" class="mc-button" onclick="setGamerule('drowningdamage', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Fall Damage • <span id="falldamage-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="falldamage-on" class="mc-button" onclick="setGamerule('falldamage', 'true')" style="flex: 1;">
+                                    ✓ Enable
+                                </button>
+                                <button type="button" id="falldamage-off" class="mc-button" onclick="setGamerule('falldamage', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Fire Damage • <span id="firedamage-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="firedamage-on" class="mc-button" onclick="setGamerule('firedamage', 'true')" style="flex: 1;">
+                                    ✓ Enable
+                                </button>
+                                <button type="button" id="firedamage-off" class="mc-button" onclick="setGamerule('firedamage', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Freeze Damage • <span id="freezedamage-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="freezedamage-on" class="mc-button" onclick="setGamerule('freezedamage', 'true')" style="flex: 1;">
+                                    ✓ Enable
+                                </button>
+                                <button type="button" id="freezedamage-off" class="mc-button" onclick="setGamerule('freezedamage', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Command Feedback • <span id="sendcommandfeedback-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="sendcommandfeedback-on" class="mc-button" onclick="setGamerule('sendcommandfeedback', 'true')" style="flex: 1;">
+                                    ✓ Show
+                                </button>
+                                <button type="button" id="sendcommandfeedback-off" class="mc-button" onclick="setGamerule('sendcommandfeedback', 'false')" style="flex: 1;">
+                                    ✗ Hide
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Immediate Respawn • <span id="doimmediaterespawn-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="doimmediaterespawn-on" class="mc-button" onclick="setGamerule('doimmediaterespawn', 'true')" style="flex: 1;">
+                                    ⚡ Enable
+                                </button>
+                                <button type="button" id="doimmediaterespawn-off" class="mc-button" onclick="setGamerule('doimmediaterespawn', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style="display: block; margin-bottom: 8px;">
+                                Insomnia (Phantoms) • <span id="doinsomnia-status" style="color: #aaa;">Loading...</span>
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="doinsomnia-on" class="mc-button" onclick="setGamerule('doinsomnia', 'true')" style="flex: 1;">
+                                    👻 Enable
+                                </button>
+                                <button type="button" id="doinsomnia-off" class="mc-button" onclick="setGamerule('doinsomnia', 'false')" style="flex: 1;">
+                                    ✗ Disable
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="color: #7cbd1e; margin-top: 30px;">Player Utilities</h3>
+
+                <div class="form-group">
+                    <label>Give Starter Map to Player</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="map-player-name" class="mc-input" placeholder="Player name" style="flex: 1;">
+                        <button type="button" class="mc-button mc-button-green" onclick="giveStarterMap()" style="white-space: nowrap;">
+                            🗺️ Give Map
+                        </button>
+                    </div>
+                    <small style="color: #aaa;">Gives an empty locator map to the specified player</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Give Maps to All Online Players</label>
+                    <button type="button" class="mc-button mc-button-blue" onclick="giveAllStarterMaps()">
+                        🗺️ Give Maps to Everyone
+                    </button>
+                    <small style="color: #aaa;">Gives an empty locator map to all currently online players</small>
+                </div>
+
+                <div style="margin-top: 30px; display: flex; gap: 12px;">
+                    <button type="submit" class="mc-button mc-button-green">
+                        💾 Save Settings
+                    </button>
+                    <button type="button" class="mc-button" onclick="loadSettings()">
+                        🔄 Reload
+                    </button>
+                </div>
+
+                <div id="save-message" style="margin-top: 16px; padding: 12px; display: none; border-radius: 4px;"></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    color: #7cbd1e;
+    font-size: 20px;
+    margin-bottom: 8px;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 4px;
+    font-size: 16px;
+}
+</style>
+
+<script>
+let currentProperties = {};
+
+function loadSettings() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('settings-form').style.display = 'none';
+
+    fetch('/api/server-properties')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentProperties = data.properties;
+                populateForm(data.properties);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('settings-form').style.display = 'block';
+            } else {
+                document.getElementById('loading').innerHTML = '<p style="color: #ff5555;">Failed to load settings: ' + data.error + '</p>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('loading').innerHTML = '<p style="color: #ff5555;">Error: ' + error + '</p>';
+        });
+}
+
+function populateForm(props) {
+    document.getElementById('server-name').value = props['server-name'] || 'Dedicated Server';
+    document.getElementById('level-seed').value = props['level-seed'] || '';
+    document.getElementById('difficulty').value = props['difficulty'] || 'easy';
+    document.getElementById('gamemode').value = props['gamemode'] || 'survival';
+    document.getElementById('max-players').value = props['max-players'] || '10';
+    document.getElementById('allow-cheats').checked = props['allow-cheats'] === 'true';
+    document.getElementById('force-gamemode').checked = props['force-gamemode'] === 'true';
+    document.getElementById('player-idle-timeout').value = props['player-idle-timeout'] || '30';
+
+    // Load gamerules with defaults (Bedrock defaults since we can't reliably query them)
+    const defaults = {
+        'showcoordinates': 'false',
+        'pvp': 'true',
+        'keepInventory': 'false',
+        'mobGriefing': 'true',
+        'doFireTick': 'true',
+        'showDeathMessages': 'true',
+        'naturalRegeneration': 'true',
+        'dodaylightcycle': 'true',
+        'doweathercycle': 'true',
+        'domobspawning': 'true',
+        'doentitydrops': 'true',
+        'dotiledrops': 'true',
+        'drowningdamage': 'true',
+        'falldamage': 'true',
+        'firedamage': 'true',
+        'freezedamage': 'true',
+        'sendcommandfeedback': 'true',
+        'doimmediaterespawn': 'false',
+        'doinsomnia': 'true'
+    };
+
+    const rules = [
+        'showcoordinates', 'pvp', 'keepInventory', 'mobGriefing',
+        'doFireTick', 'showDeathMessages', 'naturalRegeneration',
+        'dodaylightcycle', 'doweathercycle', 'domobspawning',
+        'doentitydrops', 'dotiledrops', 'drowningdamage',
+        'falldamage', 'firedamage', 'freezedamage',
+        'sendcommandfeedback', 'doimmediaterespawn', 'doinsomnia'
+    ];
+    rules.forEach(rule => {
+        // Use value from props if available, otherwise use default
+        const value = props[rule] !== undefined ? props[rule] : defaults[rule];
+        updateGameruleUI(rule, value);
+    });
+    document.getElementById('view-distance').value = props['view-distance'] || '32';
+    document.getElementById('tick-distance').value = props['tick-distance'] || '4';
+}
+
+document.getElementById('settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const updatedProperties = {
+        'server-name': document.getElementById('server-name').value,
+        'level-seed': document.getElementById('level-seed').value,
+        'difficulty': document.getElementById('difficulty').value,
+        'gamemode': document.getElementById('gamemode').value,
+        'max-players': document.getElementById('max-players').value,
+        'allow-cheats': document.getElementById('allow-cheats').checked ? 'true' : 'false',
+        'force-gamemode': document.getElementById('force-gamemode').checked ? 'true' : 'false',
+        'player-idle-timeout': document.getElementById('player-idle-timeout').value,
+        'view-distance': document.getElementById('view-distance').value,
+        'tick-distance': document.getElementById('tick-distance').value
+    };
+
+    fetch('/api/server-properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: updatedProperties })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const msgDiv = document.getElementById('save-message');
+        msgDiv.style.display = 'block';
+
+        if (data.success) {
+            msgDiv.style.backgroundColor = '#7cbd1e';
+            msgDiv.style.color = '#000';
+            msgDiv.innerHTML = '✓ ' + data.message + '<br><strong>Note: You must restart the server for changes to take effect!</strong>';
+        } else {
+            msgDiv.style.backgroundColor = '#ff5555';
+            msgDiv.style.color = '#fff';
+            msgDiv.innerHTML = '✗ Failed to save: ' + data.error;
+        }
+
+        setTimeout(() => {
+            msgDiv.style.display = 'none';
+        }, 8000);
+    });
+});
+
+function updateGameruleUI(rule, value) {
+    const isTrue = value === 'true' || value === true;
+    const statusSpan = document.getElementById(`${rule}-status`);
+    const onButton = document.getElementById(`${rule}-on`);
+    const offButton = document.getElementById(`${rule}-off`);
+
+    if (statusSpan) {
+        statusSpan.textContent = isTrue ? 'ON' : 'OFF';
+        statusSpan.style.color = isTrue ? '#7cbd1e' : '#ff5555';
+    }
+
+    if (onButton && offButton) {
+        if (isTrue) {
+            onButton.classList.add('mc-button-green');
+            onButton.classList.remove('mc-button-red');
+            offButton.classList.remove('mc-button-green', 'mc-button-red');
+        } else {
+            offButton.classList.add('mc-button-red');
+            offButton.classList.remove('mc-button-green');
+            onButton.classList.remove('mc-button-green', 'mc-button-red');
+        }
+    }
+}
+
+function setGamerule(rule, value) {
+    // Optimistically update UI immediately
+    updateGameruleUI(rule, value);
+
+    fetch('/api/gamerule/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rule: rule, value: value })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`✓ Set ${rule} to ${value}`, true);
+        } else {
+            showMessage(`✗ Failed to set ${rule}: ` + data.error, false);
+            // Revert UI on failure
+            updateGameruleUI(rule, value === 'true' ? 'false' : 'true');
+        }
+    })
+    .catch(error => {
+        showMessage(`✗ Error: ${error}`, false);
+        // Revert UI on error
+        updateGameruleUI(rule, value === 'true' ? 'false' : 'true');
+    });
+}
+
+function giveStarterMap() {
+    const playerName = document.getElementById('map-player-name').value.trim();
+
+    if (!playerName) {
+        showMessage('Please enter a player name', false);
+        return;
+    }
+
+    fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            command: `give "${playerName}" empty_map 1`
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`✓ Gave starter map to ${playerName}`, true);
+            document.getElementById('map-player-name').value = '';
+        } else {
+            showMessage(`✗ Failed to give map: ${data.error}`, false);
+        }
+    })
+    .catch(error => {
+        showMessage(`✗ Error: ${error}`, false);
+    });
+}
+
+function giveAllStarterMaps() {
+    if (!confirm('Give an empty map to all online players?')) {
+        return;
+    }
+
+    // First get the list of online players
+    fetch('/api/players')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.players && data.players.length > 0) {
+                let promises = data.players.map(player =>
+                    fetch('/api/command', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            command: `give "${player}" empty_map 1`
+                        })
+                    })
+                );
+
+                Promise.all(promises)
+                    .then(() => {
+                        showMessage(`✓ Gave starter maps to ${data.players.length} player(s)`, true);
+                    })
+                    .catch(error => {
+                        showMessage(`✗ Error giving maps: ${error}`, false);
+                    });
+            } else {
+                showMessage('No players online', false);
+            }
+        })
+        .catch(error => {
+            showMessage(`✗ Error getting players: ${error}`, false);
+        });
+}
+
+function toggleAdvancedRules() {
+    const advancedDiv = document.getElementById('advanced-rules');
+    const toggleText = document.getElementById('advanced-toggle-text');
+
+    if (advancedDiv.style.display === 'none') {
+        advancedDiv.style.display = 'block';
+        toggleText.textContent = '▲ Hide Advanced Rules';
+    } else {
+        advancedDiv.style.display = 'none';
+        toggleText.textContent = '▼ Show Advanced Rules';
+    }
+}
+
+// Load settings on page load
+loadSettings();
+</script>
+{% endblock %}

@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 1100px; margin: 0 auto;">
+    <div class="mc-grid mc-grid-2col">
+        <!-- Online Players -->
+        <div class="mc-panel">
+            <div class="mc-panel-header">
+                👥 Online Players
+            </div>
+            <div class="mc-panel-body">
+                <div id="online-players">
+                    <p style="text-align: center; color: #aaa;">Loading...</p>
+                </div>
+                <button class="mc-button" onclick="loadOnlinePlayers()" style="width: 100%; margin-top: 12px;">
+                    🔄 Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Operators -->
+        <div class="mc-panel">
+            <div class="mc-panel-header">
+                👑 Server Operators
+            </div>
+            <div class="mc-panel-body">
+                <div id="ops-list">
+                    <p style="text-align: center; color: #aaa;">Loading...</p>
+                </div>
+                <button class="mc-button" onclick="loadOps()" style="width: 100%; margin-top: 12px;">
+                    🔄 Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Actions -->
+    <div class="mc-panel">
+        <div class="mc-panel-header">
+            ⚡ Player Actions
+        </div>
+        <div class="mc-panel-body">
+            <!-- Grant/Remove OP -->
+            <div class="mc-form-group">
+                <h3 style="color: #7cbd1e; margin-top: 0; margin-bottom: 12px; font-size: 18px;">Operator Status</h3>
+                <div class="mc-form-inline" style="margin-bottom: 8px;">
+                    <input type="text" id="op-player" class="mc-input" placeholder="Player name">
+                    <button class="mc-button mc-button-green" onclick="grantOp()">
+                        👑 Grant OP
+                    </button>
+                </div>
+                <div class="mc-form-inline">
+                    <input type="text" id="deop-player" class="mc-input" placeholder="Player name">
+                    <button class="mc-button mc-button-red" onclick="removeOp()">
+                        ⬇️ Remove OP
+                    </button>
+                </div>
+            </div>
+
+            <!-- Kick Player -->
+            <div class="mc-form-group">
+                <h3 style="color: #7cbd1e; margin-top: 0; margin-bottom: 12px; font-size: 18px;">Kick Player</h3>
+                <input type="text" id="kick-player" class="mc-input" placeholder="Player name" style="margin-bottom: 8px;">
+                <input type="text" id="kick-reason" class="mc-input" placeholder="Reason (optional)" style="margin-bottom: 8px;">
+                <button class="mc-button mc-button-red" onclick="kickPlayer()" style="width: 100%;">
+                    🚫 Kick Player
+                </button>
+            </div>
+
+            <div id="action-message" style="margin-top: 16px; padding: 12px; display: none; border-radius: 4px;"></div>
+        </div>
+    </div>
+
+    <!-- Advanced Player Management -->
+    <div class="mc-panel">
+        <div class="mc-panel-header">
+            🎮 Advanced Player Management
+        </div>
+        <div class="mc-panel-body">
+            <div class="mc-grid mc-grid-2col">
+                <!-- Teleport Player -->
+                <div class="mc-form-group">
+                    <h3 style="color: #7cbd1e; margin-top: 0; margin-bottom: 12px; font-size: 16px;">🌍 Teleport Player</h3>
+                    <div style="display: grid; gap: 8px;">
+                        <input type="text" id="tp-player" class="mc-input" placeholder="Player name">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                            <input type="number" id="tp-x" class="mc-input" placeholder="X">
+                            <input type="number" id="tp-y" class="mc-input" placeholder="Y">
+                            <input type="number" id="tp-z" class="mc-input" placeholder="Z">
+                        </div>
+                        <button class="mc-button mc-button-blue" onclick="teleportPlayer()">
+                            📍 Teleport
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Give Item -->
+                <div class="mc-form-group">
+                    <h3 style="color: #7cbd1e; margin-top: 0; margin-bottom: 12px; font-size: 16px;">🎁 Give Item</h3>
+                    <div style="display: grid; gap: 8px;">
+                        <input type="text" id="give-player" class="mc-input" placeholder="Player name">
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px;">
+                            <input type="text" id="give-item" class="mc-input" placeholder="Item ID (e.g. diamond)">
+                            <input type="number" id="give-amount" class="mc-input" placeholder="Amt" value="1" min="1" style="width: 80px;">
+                        </div>
+                        <button class="mc-button mc-button-green" onclick="giveItem()">
+                            ✨ Give Item
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Change Gamemode -->
+                <div>
+                    <h3 style="color: #7cbd1e; margin-top: 0; margin-bottom: 12px; font-size: 16px;">🎯 Change Gamemode</h3>
+                    <div style="display: grid; gap: 8px;">
+                        <input type="text" id="gamemode-player" class="mc-input" placeholder="Player name">
+                        <select id="gamemode-select" class="mc-input">
+                            <option value="survival">Survival</option>
+                            <option value="creative">Creative</option>
+                            <option value="adventure">Adventure</option>
+                            <option value="spectator">Spectator</option>
+                        </select>
+                        <button class="mc-button mc-button-blue" onclick="changeGamemode()">
+                            🔄 Change Mode
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Effect Player -->
+                <div>
+                    <h3 style="color: #7cbd1e; margin-top: 0; margin-bottom: 12px; font-size: 16px;">✨ Give Effect</h3>
+                    <div style="display: grid; gap: 8px;">
+                        <input type="text" id="effect-player" class="mc-input" placeholder="Player name">
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px;">
+                            <select id="effect-type" class="mc-input">
+                                <option value="speed">Speed</option>
+                                <option value="slowness">Slowness</option>
+                                <option value="haste">Haste</option>
+                                <option value="strength">Strength</option>
+                                <option value="regeneration">Regeneration</option>
+                                <option value="resistance">Resistance</option>
+                                <option value="fire_resistance">Fire Resistance</option>
+                                <option value="water_breathing">Water Breathing</option>
+                                <option value="invisibility">Invisibility</option>
+                                <option value="night_vision">Night Vision</option>
+                            </select>
+                            <input type="number" id="effect-duration" class="mc-input" placeholder="Sec" value="30" min="1" style="width: 80px;">
+                        </div>
+                        <button class="mc-button mc-button-green" onclick="giveEffect()">
+                            💫 Apply Effect
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadOnlinePlayers() {
+    fetch('/api/players')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('online-players');
+
+            if (data.success && data.players.length > 0) {
+                container.innerHTML = '<ul style="list-style: none; padding: 0; margin: 0;">' +
+                    data.players.map(p => `<li style="padding: 8px; border-bottom: 1px solid #555;">👤 ${p}</li>`).join('') +
+                    '</ul>';
+            } else {
+                container.innerHTML = '<p style="text-align: center; color: #aaa;">No players online</p>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('online-players').innerHTML = '<p style="color: #ff5555;">Error loading players</p>';
+        });
+}
+
+function loadOps() {
+    fetch('/api/ops')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('ops-list');
+
+            if (data.success && data.ops && data.ops.length > 0) {
+                container.innerHTML = '<ul style="list-style: none; padding: 0; margin: 0;">' +
+                    data.ops.map(op => `<li style="padding: 8px; border-bottom: 1px solid #555;">👑 ${op.name || op.gamertag || op.xuid || 'Unknown'}</li>`).join('') +
+                    '</ul>';
+            } else {
+                container.innerHTML = '<p style="text-align: center; color: #aaa;">No operators</p>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('ops-list').innerHTML = '<p style="color: #ff5555;">Error loading operators</p>';
+        });
+}
+
+function grantOp() {
+    const player = document.getElementById('op-player').value.trim();
+    if (!player) {
+        showMessage('Please enter a player name', false);
+        return;
+    }
+
+    fetch('/api/player/op', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: player })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Granted OP to ${player}`, true);
+            document.getElementById('op-player').value = '';
+            setTimeout(loadOps, 1000);
+        } else {
+            showMessage('Failed to grant OP: ' + data.error, false);
+        }
+    });
+}
+
+function removeOp() {
+    const player = document.getElementById('deop-player').value.trim();
+    if (!player) {
+        showMessage('Please enter a player name', false);
+        return;
+    }
+
+    fetch('/api/player/deop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: player })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Removed OP from ${player}`, true);
+            document.getElementById('deop-player').value = '';
+            setTimeout(loadOps, 1000);
+        } else {
+            showMessage('Failed to remove OP: ' + data.error, false);
+        }
+    });
+}
+
+function kickPlayer() {
+    const player = document.getElementById('kick-player').value.trim();
+    const reason = document.getElementById('kick-reason').value.trim();
+
+    if (!player) {
+        showMessage('Please enter a player name', false);
+        return;
+    }
+
+    fetch('/api/player/kick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: player, reason: reason })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Kicked ${player}`, true);
+            document.getElementById('kick-player').value = '';
+            document.getElementById('kick-reason').value = '';
+            setTimeout(loadOnlinePlayers, 1000);
+        } else {
+            showMessage('Failed to kick player: ' + data.error, false);
+        }
+    });
+}
+
+function showMessage(msg, success) {
+    const msgDiv = document.getElementById('action-message');
+    msgDiv.style.display = 'block';
+    msgDiv.style.backgroundColor = success ? '#7cbd1e' : '#ff5555';
+    msgDiv.style.color = success ? '#000' : '#fff';
+    msgDiv.textContent = msg;
+
+    setTimeout(() => {
+        msgDiv.style.display = 'none';
+    }, 5000);
+}
+
+function teleportPlayer() {
+    const player = document.getElementById('tp-player').value.trim();
+    const x = document.getElementById('tp-x').value;
+    const y = document.getElementById('tp-y').value;
+    const z = document.getElementById('tp-z').value;
+
+    if (!player || !x || !y || !z) {
+        showMessage('Please fill in all teleport fields', false);
+        return;
+    }
+
+    fetch('/api/player/teleport', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: player, x: parseFloat(x), y: parseFloat(y), z: parseFloat(z) })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Teleported ${player} to ${x}, ${y}, ${z}`, true);
+            document.getElementById('tp-player').value = '';
+            document.getElementById('tp-x').value = '';
+            document.getElementById('tp-y').value = '';
+            document.getElementById('tp-z').value = '';
+        } else {
+            showMessage('Failed to teleport: ' + data.error, false);
+        }
+    });
+}
+
+function giveItem() {
+    const player = document.getElementById('give-player').value.trim();
+    const item = document.getElementById('give-item').value.trim();
+    const amount = document.getElementById('give-amount').value;
+
+    if (!player || !item) {
+        showMessage('Please enter player name and item', false);
+        return;
+    }
+
+    fetch('/api/player/give', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: player, item: item, amount: parseInt(amount) })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Gave ${amount} ${item} to ${player}`, true);
+            document.getElementById('give-player').value = '';
+            document.getElementById('give-item').value = '';
+            document.getElementById('give-amount').value = '1';
+        } else {
+            showMessage('Failed to give item: ' + data.error, false);
+        }
+    });
+}
+
+function changeGamemode() {
+    const player = document.getElementById('gamemode-player').value.trim();
+    const gamemode = document.getElementById('gamemode-select').value;
+
+    if (!player) {
+        showMessage('Please enter a player name', false);
+        return;
+    }
+
+    fetch('/api/player/gamemode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: player, gamemode: gamemode })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Changed ${player}'s gamemode to ${gamemode}`, true);
+            document.getElementById('gamemode-player').value = '';
+        } else {
+            showMessage('Failed to change gamemode: ' + data.error, false);
+        }
+    });
+}
+
+function giveEffect() {
+    const player = document.getElementById('effect-player').value.trim();
+    const effect = document.getElementById('effect-type').value;
+    const duration = document.getElementById('effect-duration').value;
+
+    if (!player) {
+        showMessage('Please enter a player name', false);
+        return;
+    }
+
+    fetch('/api/player/effect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: player, effect: effect, duration: parseInt(duration) })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Gave ${effect} to ${player} for ${duration}s`, true);
+            document.getElementById('effect-player').value = '';
+        } else {
+            showMessage('Failed to give effect: ' + data.error, false);
+        }
+    });
+}
+
+// Load on page load
+loadOnlinePlayers();
+loadOps();
+
+// Auto-refresh every 10 seconds
+setInterval(loadOnlinePlayers, 10000);
+</script>
+{% endblock %}

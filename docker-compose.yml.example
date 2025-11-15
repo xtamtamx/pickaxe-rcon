@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  pickaxe-rcon:
+    image: xtamtamx/pickaxe-rcon:latest
+    # Or build locally:
+    # build: .
+    container_name: pickaxe-rcon
+    restart: unless-stopped
+
+    ports:
+      - "5000:5000"  # Change left side to your desired port
+
+    environment:
+      # Initial admin credentials (can be changed in UI later)
+      - ADMIN_USER=admin
+      - ADMIN_PASS=change-this-password
+      # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+      - SECRET_KEY=your-secret-key-change-this
+
+    volumes:
+      # Persistent data storage
+      - ./data:/app/data
+
+      # Docker socket for local container management
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # SSH keys for remote server management (optional)
+      # - ~/.ssh/minecraft_panel_rsa:/root/.ssh/minecraft_panel_rsa:ro
+      # - ~/.ssh/minecraft_panel_rsa.pub:/root/.ssh/minecraft_panel_rsa.pub:ro
+
+      # Optional: Override templates/static for customization
+      # - ./templates:/app/templates
+      # - ./static:/app/static
+
+networks:
+  default:
+    name: minecraft-network

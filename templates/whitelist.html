@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <div class="mc-panel">
+        <div class="mc-panel-header">
+            📋 Whitelist Management
+        </div>
+        <div class="mc-panel-body">
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #7cbd1e; margin-top: 0;">Add Player to Whitelist</h3>
+                <div style="display: flex; gap: 12px;">
+                    <input type="text" id="player-name" class="mc-input" placeholder="Enter player name" style="flex: 1;">
+                    <button class="mc-button mc-button-green" onclick="addPlayer()">
+                        ➕ Add Player
+                    </button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #7cbd1e;">Whitelist Status</h3>
+                <div style="display: flex; gap: 12px;">
+                    <button class="mc-button mc-button-green" onclick="toggleWhitelist(true)">
+                        ✓ Enable Whitelist
+                    </button>
+                    <button class="mc-button mc-button-red" onclick="toggleWhitelist(false)">
+                        ✗ Disable Whitelist
+                    </button>
+                </div>
+            </div>
+
+            <h3 style="color: #7cbd1e;">Whitelisted Players</h3>
+            <div id="whitelist-loading" style="text-align: center; padding: 20px;">
+                <p>Loading whitelist...</p>
+            </div>
+
+            <div id="whitelist-container" style="display: none;">
+                <table class="mc-table">
+                    <thead>
+                        <tr>
+                            <th>Player Name</th>
+                            <th>XUID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="whitelist-body">
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="message" style="margin-top: 16px; padding: 12px; display: none; border-radius: 4px;"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+.mc-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+
+.mc-table th {
+    background-color: #555;
+    color: #7cbd1e;
+    padding: 12px;
+    text-align: left;
+    font-size: 20px;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.mc-table td {
+    padding: 12px;
+    border-bottom: 2px solid #555;
+    font-size: 18px;
+}
+
+.mc-table tbody tr:hover {
+    background-color: rgba(124, 203, 30, 0.1);
+}
+</style>
+
+<script>
+function loadWhitelist() {
+    document.getElementById('whitelist-loading').style.display = 'block';
+    document.getElementById('whitelist-container').style.display = 'none';
+
+    fetch('/api/whitelist')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayWhitelist(data.whitelist);
+                document.getElementById('whitelist-loading').style.display = 'none';
+                document.getElementById('whitelist-container').style.display = 'block';
+            } else {
+                showMessage('Failed to load whitelist: ' + data.error, false);
+            }
+        })
+        .catch(error => {
+            showMessage('Error loading whitelist: ' + error, false);
+        });
+}
+
+function displayWhitelist(whitelist) {
+    const tbody = document.getElementById('whitelist-body');
+    tbody.innerHTML = '';
+
+    if (!whitelist || whitelist.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #aaa;">No players whitelisted</td></tr>';
+        return;
+    }
+
+    whitelist.forEach(player => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${player.name || player.gamertag || 'Unknown'}</td>
+            <td style="font-family: monospace; color: #aaa;">${player.xuid || 'N/A'}</td>
+            <td>
+                <button class="mc-button mc-button-red" onclick="removePlayer('${player.name || player.gamertag}')">
+                    🗑️ Remove
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function addPlayer() {
+    const playerName = document.getElementById('player-name').value.trim();
+
+    if (!playerName) {
+        showMessage('Please enter a player name', false);
+        return;
+    }
+
+    fetch('/api/whitelist/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: playerName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Successfully added ${playerName} to whitelist`, true);
+            document.getElementById('player-name').value = '';
+            setTimeout(loadWhitelist, 1000);
+        } else {
+            showMessage('Failed to add player: ' + data.error, false);
+        }
+    });
+}
+
+function removePlayer(playerName) {
+    if (!confirm(`Remove ${playerName} from whitelist?`)) {
+        return;
+    }
+
+    fetch('/api/whitelist/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: playerName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Successfully removed ${playerName} from whitelist`, true);
+            setTimeout(loadWhitelist, 1000);
+        } else {
+            showMessage('Failed to remove player: ' + data.error, false);
+        }
+    });
+}
+
+function toggleWhitelist(enable) {
+    const action = enable ? 'whitelist_on' : 'whitelist_off';
+
+    fetch(`/api/quick/${action}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage(`Whitelist ${enable ? 'enabled' : 'disabled'}`, true);
+            } else {
+                showMessage('Failed to toggle whitelist: ' + data.error, false);
+            }
+        });
+}
+
+function showMessage(msg, success) {
+    const msgDiv = document.getElementById('message');
+    msgDiv.style.display = 'block';
+    msgDiv.style.backgroundColor = success ? '#7cbd1e' : '#ff5555';
+    msgDiv.style.color = success ? '#000' : '#fff';
+    msgDiv.textContent = msg;
+
+    setTimeout(() => {
+        msgDiv.style.display = 'none';
+    }, 5000);
+}
+
+// Load on page load
+loadWhitelist();
+
+// Handle Enter key
+document.getElementById('player-name').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        addPlayer();
+    }
+});
+</script>
+{% endblock %}

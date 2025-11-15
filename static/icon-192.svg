@@ -1,0 +1,30 @@
+<svg width="192" height="192" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="192" height="192" fill="#5a8c2a" rx="32"/>
+
+  <!-- Border effect -->
+  <rect x="8" y="8" width="176" height="176" fill="none" stroke="#7cbd1e" stroke-width="4" rx="28"/>
+
+  <!-- Pickaxe handle (brown) -->
+  <rect x="86" y="90" width="20" height="70" fill="#654321"/>
+  <rect x="82" y="86" width="4" height="4" fill="#8B6F47"/>
+  <rect x="106" y="86" width="4" height="4" fill="#4a3018"/>
+
+  <!-- Pickaxe head (iron/gray) -->
+  <rect x="56" y="50" width="80" height="24" fill="#8b8b8b"/>
+  <rect x="52" y="54" width="4" height="4" fill="#aaa"/>
+  <rect x="136" y="54" width="4" height="4" fill="#666"/>
+  <rect x="52" y="70" width="4" height="4" fill="#666"/>
+  <rect x="136" y="70" width="4" height="4" fill="#aaa"/>
+
+  <!-- Pickaxe points -->
+  <polygon points="52,54 44,62 44,66 52,74" fill="#8b8b8b"/>
+  <polygon points="140,54 148,62 148,66 140,74" fill="#8b8b8b"/>
+
+  <!-- Highlights -->
+  <rect x="60" y="54" width="8" height="4" fill="#aaa"/>
+  <rect x="124" y="54" width="8" height="4" fill="#999"/>
+
+  <!-- Shadow on handle -->
+  <rect x="102" y="94" width="4" height="62" fill="#4a3018" opacity="0.3"/>
+</svg>
