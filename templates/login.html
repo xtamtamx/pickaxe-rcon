@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Minecraft Control Panel</title>
+    <link rel="stylesheet" href="/static/css/minecraft.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .login-container {
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .mc-logo {
+            font-size: 72px;
+            margin-bottom: 20px;
+            animation: bounce 2s ease-in-out infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .error-message {
+            background-color: #cc4125;
+            color: #fff;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 3px solid #8b0000;
+            text-shadow: 2px 2px 0 #000;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="mc-logo">
+            <img src="/static/Iron_Pickaxe_JE3_BE2.webp" width="72" height="72" alt="Pickaxe" style="image-rendering: pixelated;" />
+        </div>
+        <h1 class="mc-title glow">Pickaxe RCON</h1>
+        
+        <div class="mc-login-box">
+            {% if error %}
+            <div class="error-message">
+                ❌ {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; text-align: left; margin-bottom: 8px; font-size: 24px; color: #fff; text-shadow: 2px 2px 0 #000;">
+                        👤 Username
+                    </label>
+                    <input type="text" name="username" class="mc-input" required autofocus 
+                           style="width: 100%; font-size: 24px;">
+                </div>
+                
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; text-align: left; margin-bottom: 8px; font-size: 24px; color: #fff; text-shadow: 2px 2px 0 #000;">
+                        🔑 Password
+                    </label>
+                    <input type="password" name="password" class="mc-input" required 
+                           style="width: 100%; font-size: 24px;">
+                </div>
+                
+                <button type="submit" class="mc-button mc-button-green" 
+                        style="width: 100%; font-size: 28px; padding: 12px;">
+                    ▶️ Enter World
+                </button>
+            </form>
+        </div>
+        
+        <div style="margin-top: 30px; font-size: 18px; color: #7cbd1e; text-shadow: 2px 2px 0 #000;">
+            🎮 Ready to manage your server! 🎮
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - Minecraft Admin Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/minecraft.css') }}">
+</head>
+<body>
+    <div class="mc-container">
+        <div class="mc-header">
+            <h1>⚙️ Minecraft Admin Panel Setup</h1>
+            <p>Welcome! Let's configure your Minecraft server connection.</p>
+        </div>
+
+        <div class="mc-card">
+            <h2>Step 1: Server Connection</h2>
+            <p>Configure how the admin panel connects to your Minecraft Bedrock server.</p>
+
+            <form method="POST" action="/setup">
+                <div class="mc-form-group">
+                    <label for="connection_type">Connection Type:</label>
+                    <select id="connection_type" name="connection_type" class="mc-input" required>
+                        <option value="ssh">SSH (Remote Server)</option>
+                        <option value="local">Local (Same Machine)</option>
+                    </select>
+                    <small>Choose SSH if your Minecraft server runs on a different machine</small>
+                </div>
+
+                <div id="ssh-fields">
+                    <div class="mc-form-group">
+                        <label for="ssh_host">SSH Host (IP Address):</label>
+                        <input type="text" id="ssh_host" name="ssh_host" class="mc-input"
+                               placeholder="192.168.1.100" value="{{ ssh_host or '' }}">
+                        <small>The IP address of the machine running your Minecraft server</small>
+                    </div>
+
+                    <div class="mc-form-group">
+                        <label for="ssh_user">SSH Username:</label>
+                        <input type="text" id="ssh_user" name="ssh_user" class="mc-input"
+                               placeholder="username" value="{{ ssh_user or '' }}">
+                        <small>Username to SSH into the server</small>
+                    </div>
+                </div>
+
+                <div class="mc-form-group">
+                    <label for="container_name">Minecraft Container Name:</label>
+                    <input type="text" id="container_name" name="container_name" class="mc-input"
+                           placeholder="minecraft-bedrock-server" value="{{ container_name or '' }}" required>
+                    <small>Name of your Docker container running Minecraft Bedrock</small>
+                </div>
+
+                <div class="mc-form-group">
+                    <label for="server_host">Server Host (for RCON):</label>
+                    <input type="text" id="server_host" name="server_host" class="mc-input"
+                           placeholder="192.168.1.100" value="{{ server_host or '' }}" required>
+                    <small>IP address where the Minecraft server is accessible</small>
+                </div>
+
+                <h2>Step 2: Admin Credentials</h2>
+                <p>Set your admin panel login credentials.</p>
+
+                <div class="mc-form-group">
+                    <label for="admin_user">Admin Username:</label>
+                    <input type="text" id="admin_user" name="admin_user" class="mc-input"
+                           placeholder="admin" value="admin" required>
+                </div>
+
+                <div class="mc-form-group">
+                    <label for="admin_pass">Admin Password:</label>
+                    <input type="password" id="admin_pass" name="admin_pass" class="mc-input"
+                           placeholder="Enter a secure password" required minlength="6">
+                    <small>Minimum 6 characters</small>
+                </div>
+
+                <div class="mc-form-group">
+                    <label for="admin_pass_confirm">Confirm Password:</label>
+                    <input type="password" id="admin_pass_confirm" name="admin_pass_confirm" class="mc-input"
+                           placeholder="Re-enter password" required>
+                </div>
+
+                {% if error %}
+                <div class="mc-alert-error">
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                <button type="submit" class="mc-button mc-button-primary">Complete Setup</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Show/hide SSH fields based on connection type
+        const connectionType = document.getElementById('connection_type');
+        const sshFields = document.getElementById('ssh-fields');
+        const sshHost = document.getElementById('ssh_host');
+        const sshUser = document.getElementById('ssh_user');
+
+        function toggleSSHFields() {
+            if (connectionType.value === 'ssh') {
+                sshFields.style.display = 'block';
+                sshHost.required = true;
+                sshUser.required = true;
+            } else {
+                sshFields.style.display = 'none';
+                sshHost.required = false;
+                sshUser.required = false;
+            }
+        }
+
+        connectionType.addEventListener('change', toggleSSHFields);
+        toggleSSHFields();
+
+        // Password validation
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function(e) {
+            const pass = document.getElementById('admin_pass').value;
+            const passConfirm = document.getElementById('admin_pass_confirm').value;
+
+            if (pass !== passConfirm) {
+                e.preventDefault();
+                alert('Passwords do not match!');
+                return false;
+            }
+        });
+    </script>
+</body>
+</html>

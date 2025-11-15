@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#7cbd1e">
+    <title>{% block title %}Minecraft Bedrock Panel{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/minecraft.css">
+    <link rel="manifest" href="/static/manifest.json">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="mc-navbar">
+        <div class="nav-container">
+            <div class="nav-header">
+                <a class="mc-navbar-brand" href="/">
+                    <img src="/static/Iron_Pickaxe_JE3_BE2.webp" width="32" height="32" alt="Pickaxe" style="vertical-align: middle; margin-right: 8px; image-rendering: pixelated;" />
+                    <span class="brand-text">Pickaxe RCON</span>
+                </a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="mc-button mc-button-blue nav-btn">Console</a>
+                <a href="/players" class="mc-button nav-btn">Players</a>
+                <a href="/worlds" class="mc-button mc-button-green nav-btn">Worlds</a>
+                <div class="nav-dropdown">
+                    <button class="mc-button nav-btn dropdown-toggle" onclick="toggleDropdown(event)">
+                        More ▾
+                    </button>
+                    <div class="dropdown-menu">
+                        <a href="/performance" class="dropdown-item">📊 Performance</a>
+                        <a href="/logs" class="dropdown-item">📋 Logs</a>
+                        <a href="/scheduler" class="dropdown-item">⏰ Scheduler</a>
+                        <a href="/server-settings" class="dropdown-item">⚙️ Settings</a>
+                        <a href="/whitelist" class="dropdown-item">📝 Whitelist</a>
+                        <a href="/server-control" class="dropdown-item">🎛️ Server Control</a>
+                        <div class="dropdown-divider"></div>
+                        <a href="/connection-settings" class="dropdown-item">🔧 Connection</a>
+                    </div>
+                </div>
+            </div>
+            <div class="nav-actions">
+                <span class="server-ip show-desktop">
+                    🖥️ {{ rcon_host or '192.168.86.149' }}
+                </span>
+                <button class="mc-button mc-button-red" onclick="location.href='/logout'">
+                    Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div style="max-width: 1400px; margin: 20px auto; padding: 0 20px;">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(reg => console.log('Service Worker registered'))
+                .catch(err => console.log('Service Worker registration failed'));
+        }
+
+        // Dropdown menu functionality
+        function toggleDropdown(event) {
+            event.stopPropagation();
+            const dropdown = event.target.closest('.nav-dropdown');
+            const menu = dropdown.querySelector('.dropdown-menu');
+            const isOpen = menu.classList.contains('show');
+
+            // Close all dropdowns
+            document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+
+            // Toggle current dropdown
+            if (!isOpen) {
+                menu.classList.add('show');
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function() {
+            document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

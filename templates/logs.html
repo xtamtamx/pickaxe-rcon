@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 1400px; margin: 0 auto;">
+    <h1 style="color: #7cbd1e; margin-bottom: 20px;">📋 Server Logs</h1>
+
+    <!-- Controls -->
+    <div class="mc-panel" style="margin-bottom: 20px;">
+        <div class="mc-panel-body" style="padding: 20px;">
+            <!-- Search Bar -->
+            <div style="margin-bottom: 16px;">
+                <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">🔍 Search Logs</label>
+                <input type="text" id="search-input" class="mc-input" placeholder="Search...">
+            </div>
+
+            <!-- Filters Row -->
+            <div style="display: grid; grid-template-columns: 150px 120px 1fr; gap: 16px; margin-bottom: 16px;">
+                <div>
+                    <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">Log Level</label>
+                    <select id="level-filter" class="mc-input" style="width: 100%;">
+                        <option value="">All Levels</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARN">WARN</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">Lines</label>
+                    <select id="lines-count" class="mc-input" style="width: 100%;">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                    </select>
+                </div>
+
+                <div style="align-self: end;">
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+                        <button class="mc-button mc-button-green" onclick="loadLogs()">🔄 Refresh</button>
+                        <button class="mc-button mc-button-blue" onclick="toggleAutoRefresh()">
+                            <span id="auto-refresh-icon">⏯️</span> <span id="auto-refresh-label">Auto</span>
+                        </button>
+                        <button class="mc-button" onclick="downloadLogs()">💾 Save</button>
+                        <button class="mc-button" onclick="clearDisplay()">🗑️ Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                <span id="auto-refresh-status" style="color: #aaa; font-size: 14px;">Auto-Refresh: OFF</span>
+                <span id="log-count" style="color: #7cbd1e; font-size: 14px; font-weight: bold;">0 lines</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Display -->
+    <div class="mc-panel">
+        <div class="mc-panel-header">
+            📜 Log Output
+        </div>
+        <div class="mc-panel-body" style="padding: 0;">
+            <div id="log-viewer" style="
+                background: #1a1a1a;
+                color: #ddd;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                padding: 16px;
+                height: 600px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                line-height: 1.5;
+            ">
+                <span style="color: #7cbd1e;">Loading logs...</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let autoRefreshInterval = null;
+let isAutoRefresh = false;
+
+function loadLogs() {
+    const search = document.getElementById('search-input').value;
+    const level = document.getElementById('level-filter').value;
+    const lines = document.getElementById('lines-count').value;
+
+    const params = new URLSearchParams({
+        lines: lines,
+        search: search,
+        level: level
+    });
+
+    fetch(`/api/logs?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const logViewer = document.getElementById('log-viewer');
+                const logLines = data.logs.split('\n');
+
+                // Color code log lines
+                const coloredLogs = logLines.map(line => {
+                    if (!line.trim()) return '';
+
+                    let color = '#ddd';
+                    if (line.includes('[ERROR]')) {
+                        color = '#ff5555';
+                    } else if (line.includes('[WARN]')) {
+                        color = '#ffaa00';
+                    } else if (line.includes('[INFO]')) {
+                        color = '#7cbd1e';
+                    }
+
+                    // Highlight search term
+                    if (search && line.toLowerCase().includes(search.toLowerCase())) {
+                        const regex = new RegExp(`(${search})`, 'gi');
+                        line = line.replace(regex, '<mark style="background: #ffaa00; color: #000;">$1</mark>');
+                    }
+
+                    return `<div style="color: ${color}; border-bottom: 1px solid #333; padding: 4px 0;">${line}</div>`;
+                }).join('');
+
+                logViewer.innerHTML = coloredLogs || '<span style="color: #aaa;">No logs found</span>';
+
+                // Update count
+                document.getElementById('log-count').textContent = `${data.line_count} lines`;
+
+                // Auto-scroll to bottom
+                logViewer.scrollTop = logViewer.scrollHeight;
+            } else {
+                document.getElementById('log-viewer').innerHTML = '<span style="color: #ff5555;">Failed to load logs</span>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('log-viewer').innerHTML = `<span style="color: #ff5555;">Error: ${error}</span>`;
+        });
+}
+
+function toggleAutoRefresh() {
+    isAutoRefresh = !isAutoRefresh;
+    const icon = document.getElementById('auto-refresh-icon');
+    const status = document.getElementById('auto-refresh-status');
+
+    if (isAutoRefresh) {
+        icon.textContent = '⏸️';
+        status.textContent = 'Auto-Refresh: ON';
+        status.style.color = '#7cbd1e';
+        autoRefreshInterval = setInterval(loadLogs, 3000); // Refresh every 3 seconds
+        loadLogs(); // Load immediately
+    } else {
+        icon.textContent = '⏯️';
+        status.textContent = 'Auto-Refresh: OFF';
+        status.style.color = '#aaa';
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+}
+
+function downloadLogs() {
+    const logViewer = document.getElementById('log-viewer');
+    const logs = logViewer.innerText;
+
+    const blob = new Blob([logs], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `minecraft-server-logs-${new Date().toISOString()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function clearDisplay() {
+    document.getElementById('log-viewer').innerHTML = '<span style="color: #aaa;">Display cleared. Click Refresh to load logs.</span>';
+    document.getElementById('log-count').textContent = '0 lines';
+}
+
+// Trigger search on Enter key
+document.getElementById('search-input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        loadLogs();
+    }
+});
+
+// Auto-load logs when filter changes
+document.getElementById('level-filter').addEventListener('change', loadLogs);
+document.getElementById('lines-count').addEventListener('change', loadLogs);
+
+// Load logs on page load
+loadLogs();
+</script>
+{% endblock %}

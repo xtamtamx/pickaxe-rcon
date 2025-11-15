@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 1400px; margin: 0 auto;">
+    <h1 style="color: #7cbd1e; margin-bottom: 20px;">⏰ Scheduled Tasks</h1>
+
+    <!-- Create New Task -->
+    <div class="mc-panel" style="margin-bottom: 20px;">
+        <div class="mc-panel-header">
+            ➕ Create New Task
+        </div>
+        <div class="mc-panel-body" style="padding: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">Task Name</label>
+                        <input type="text" id="task-name" class="mc-input" placeholder="e.g. Auto Save">
+                    </div>
+
+                    <div>
+                        <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">Command</label>
+                        <input type="text" id="task-command" class="mc-input" placeholder="e.g. save-all">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">Schedule Type</label>
+                        <select id="schedule-type" class="mc-input" onchange="toggleScheduleOptions()">
+                            <option value="interval">Interval (Every X minutes)</option>
+                            <option value="cron">Cron (Specific times)</option>
+                        </select>
+                    </div>
+
+                    <div id="interval-option">
+                        <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">Interval (minutes)</label>
+                        <input type="number" id="interval-minutes" class="mc-input" value="60" min="1">
+                    </div>
+
+                    <div id="cron-option" style="display: none;">
+                        <label style="color: #7cbd1e; display: block; margin-bottom: 6px; font-size: 14px;">Cron Expression</label>
+                        <input type="text" id="cron-expr" class="mc-input" placeholder="0 * * * *">
+                        <small style="color: #aaa; font-size: 12px; display: block; margin-top: 4px;">minute hour day month day_of_week</small>
+                    </div>
+                </div>
+
+                <button class="mc-button mc-button-green" onclick="createTask()" style="padding: 12px;">
+                    ✓ Create Task
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Templates -->
+    <div class="mc-panel" style="margin-bottom: 20px;">
+        <div class="mc-panel-header">
+            ⚡ Quick Templates
+        </div>
+        <div class="mc-panel-body">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <button class="mc-button mc-button-green" onclick="applyTemplate('auto-save')">
+                    💾 Auto Save (30min)
+                </button>
+                <button class="mc-button mc-button-green" onclick="applyTemplate('backup-12hr')">
+                    📦 Backup (12hr)
+                </button>
+                <button class="mc-button mc-button-blue" onclick="applyTemplate('announce')">
+                    📢 Announcement (1hr)
+                </button>
+                <button class="mc-button" onclick="applyTemplate('backup-daily')">
+                    🗂️ Backup (Daily)
+                </button>
+                <button class="mc-button" onclick="applyTemplate('restart-warn')">
+                    ⚠️ Restart Warning
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Tasks -->
+    <div class="mc-panel">
+        <div class="mc-panel-header">
+            📋 Active Tasks
+        </div>
+        <div class="mc-panel-body">
+            <div id="tasks-list">
+                <p style="text-align: center; color: #aaa;">Loading tasks...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Display -->
+    <div id="message" style="display: none; margin-top: 20px; padding: 16px; border-radius: 4px;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleScheduleOptions() {
+    const type = document.getElementById('schedule-type').value;
+    document.getElementById('interval-option').style.display = type === 'interval' ? 'block' : 'none';
+    document.getElementById('cron-option').style.display = type === 'cron' ? 'block' : 'none';
+}
+
+function applyTemplate(template) {
+    const templates = {
+        'auto-save': {
+            name: 'Auto Save World',
+            command: 'save-all',
+            type: 'interval',
+            interval: 30
+        },
+        'backup-12hr': {
+            name: '12 Hour World Backup',
+            command: 'say Creating automatic backup...',
+            type: 'interval',
+            interval: 720
+        },
+        'announce': {
+            name: 'Server Announcement',
+            command: 'say Server is running smoothly!',
+            type: 'interval',
+            interval: 60
+        },
+        'backup-daily': {
+            name: 'Daily Backup Reminder',
+            command: 'say Remember to backup the world!',
+            type: 'cron',
+            cron: '0 0 * * *'
+        },
+        'restart-warn': {
+            name: 'Restart Warning',
+            command: 'say Server will restart in 5 minutes!',
+            type: 'cron',
+            cron: '55 3 * * *'
+        }
+    };
+
+    const t = templates[template];
+    if (t) {
+        document.getElementById('task-name').value = t.name;
+        document.getElementById('task-command').value = t.command;
+        document.getElementById('schedule-type').value = t.type;
+        toggleScheduleOptions();
+
+        if (t.type === 'interval') {
+            document.getElementById('interval-minutes').value = t.interval;
+        } else {
+            document.getElementById('cron-expr').value = t.cron;
+        }
+    }
+}
+
+function createTask() {
+    const name = document.getElementById('task-name').value.trim();
+    const command = document.getElementById('task-command').value.trim();
+    const scheduleType = document.getElementById('schedule-type').value;
+
+    if (!name || !command) {
+        showMessage('Please enter task name and command', false);
+        return;
+    }
+
+    const data = {
+        name: name,
+        command: command,
+        schedule_type: scheduleType
+    };
+
+    if (scheduleType === 'interval') {
+        data.interval_minutes = parseInt(document.getElementById('interval-minutes').value);
+    } else {
+        data.cron = document.getElementById('cron-expr').value.trim();
+    }
+
+    fetch('/api/scheduler/task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('✓ Task created successfully!', true);
+            document.getElementById('task-name').value = '';
+            document.getElementById('task-command').value = '';
+            loadTasks();
+        } else {
+            showMessage('✗ Failed to create task: ' + data.error, false);
+        }
+    });
+}
+
+function loadTasks() {
+    fetch('/api/scheduler/tasks')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const tasksDiv = document.getElementById('tasks-list');
+                const tasks = data.tasks;
+
+                if (Object.keys(tasks).length === 0) {
+                    tasksDiv.innerHTML = '<p style="text-align: center; color: #aaa;">No tasks scheduled yet</p>';
+                    return;
+                }
+
+                let html = '<div style="display: grid; gap: 12px;">';
+
+                for (const [taskId, task] of Object.entries(tasks)) {
+                    const enabled = task.enabled ? 'Enabled' : 'Disabled';
+                    const enabledColor = task.enabled ? '#7cbd1e' : '#aaa';
+                    const scheduleInfo = task.schedule_type === 'interval'
+                        ? `Every ${task.interval_minutes} minutes`
+                        : `Cron: ${task.cron}`;
+
+                    const lastRun = task.last_run
+                        ? new Date(task.last_run).toLocaleString()
+                        : 'Never';
+
+                    html += `
+                        <div class="mc-panel" style="padding: 12px; background: #2a2a2a;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 18px; color: #7cbd1e; font-weight: bold;">${task.name}</div>
+                                    <div style="color: #ddd; margin-top: 4px;">Command: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 3px;">${task.command}</code></div>
+                                    <div style="color: #aaa; font-size: 13px; margin-top: 4px;">
+                                        ${scheduleInfo} • Last run: ${lastRun}
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <span style="color: ${enabledColor}; font-weight: bold;">${enabled}</span>
+                                    <button class="mc-button mc-button-blue" onclick="toggleTask('${taskId}', ${!task.enabled})" style="padding: 6px 12px;">
+                                        ${task.enabled ? '⏸️' : '▶️'}
+                                    </button>
+                                    <button class="mc-button mc-button-red" onclick="deleteTask('${taskId}')" style="padding: 6px 12px;">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += '</div>';
+                tasksDiv.innerHTML = html;
+            }
+        });
+}
+
+function toggleTask(taskId, enabled) {
+    fetch(`/api/scheduler/task/${taskId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: enabled })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(`Task ${enabled ? 'enabled' : 'disabled'}`, true);
+            loadTasks();
+        }
+    });
+}
+
+function deleteTask(taskId) {
+    if (!confirm('Are you sure you want to delete this task?')) return;
+
+    fetch(`/api/scheduler/task/${taskId}`, { method: 'DELETE' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('Task deleted', true);
+                loadTasks();
+            }
+        });
+}
+
+function showMessage(msg, success) {
+    const msgDiv = document.getElementById('message');
+    msgDiv.style.display = 'block';
+    msgDiv.style.backgroundColor = success ? '#7cbd1e' : '#ff5555';
+    msgDiv.style.color = success ? '#000' : '#fff';
+    msgDiv.textContent = msg;
+
+    setTimeout(() => {
+        msgDiv.style.display = 'none';
+    }, 5000);
+}
+
+// Load tasks on page load
+loadTasks();
+
+// Refresh tasks every 30 seconds
+setInterval(loadTasks, 30000);
+</script>
+{% endblock %}
