@@ -16,6 +16,46 @@ from functools import wraps
 
 load_dotenv()
 
+# Validation helpers
+def validate_minecraft_name(name):
+    """Validate Minecraft username (3-16 chars, alphanumeric and underscore only)"""
+    if not name or not isinstance(name, str):
+        return False
+    if len(name) < 3 or len(name) > 16:
+        return False
+    return bool(re.match(r'^[a-zA-Z0-9_]+$', name))
+
+# Common Minecraft items for Welcome Kit
+COMMON_WELCOME_ITEMS = {
+    'map', 'filled_map', 'compass', 'bread', 'apple', 'cooked_beef',
+    'wooden_pickaxe', 'wooden_axe', 'wooden_sword', 'wooden_shovel',
+    'stone_pickaxe', 'stone_axe', 'stone_sword', 'stone_shovel',
+    'iron_pickaxe', 'iron_axe', 'iron_sword', 'iron_shovel',
+    'oak_log', 'cobblestone', 'torch', 'bed', 'crafting_table',
+    'chest', 'stick', 'coal', 'iron_ingot', 'diamond', 'gold_ingot',
+    'boat', 'shield', 'bucket', 'water_bucket', 'fishing_rod'
+}
+
+# Valid Minecraft effects
+VALID_EFFECTS = {
+    'speed', 'slowness', 'haste', 'mining_fatigue', 'strength',
+    'instant_health', 'instant_damage', 'jump_boost', 'nausea',
+    'regeneration', 'resistance', 'fire_resistance', 'water_breathing',
+    'invisibility', 'blindness', 'night_vision', 'hunger', 'weakness',
+    'poison', 'wither', 'health_boost', 'absorption', 'saturation'
+}
+
+# Valid gamerules
+VALID_GAMERULES = {
+    'commandBlockOutput', 'commandBlocksEnabled', 'doDaylightCycle',
+    'doEntityDrops', 'doFireTick', 'doImmediateRespawn', 'doInsomnia',
+    'doMobLoot', 'doMobSpawning', 'doTileDrops', 'doWeatherCycle',
+    'drowningDamage', 'fallDamage', 'fireDamage', 'keepInventory',
+    'mobGriefing', 'naturalRegeneration', 'pvp', 'randomTickSpeed',
+    'sendCommandFeedback', 'showCoordinates', 'showDeathMessages',
+    'spawnRadius', 'tntExplodes'
+}
+
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for development
@@ -427,10 +467,13 @@ def get_whitelist():
 def add_to_whitelist():
     """Add player to whitelist"""
     data = request.get_json()
-    player = data.get('player', '')
+    player = data.get('player', '').strip()
 
     if not player:
         return jsonify({'success': False, 'error': 'No player specified'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
 
     result = execute_bedrock_command(f'whitelist add "{player}"')
     return jsonify(result)
@@ -440,10 +483,13 @@ def add_to_whitelist():
 def remove_from_whitelist():
     """Remove player from whitelist"""
     data = request.get_json()
-    player = data.get('player', '')
+    player = data.get('player', '').strip()
 
     if not player:
         return jsonify({'success': False, 'error': 'No player specified'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
 
     result = execute_bedrock_command(f'whitelist remove "{player}"')
     return jsonify(result)
@@ -460,11 +506,18 @@ def get_ops():
 def kick_player():
     """Kick a player"""
     data = request.get_json()
-    player = data.get('player', '')
-    reason = data.get('reason', '')
+    player = data.get('player', '').strip()
+    reason = data.get('reason', '').strip()
 
     if not player:
         return jsonify({'success': False, 'error': 'No player specified'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
+
+    # Sanitize reason (basic cleanup for safety)
+    if reason:
+        reason = re.sub(r'[^\w\s\-]', '', reason)[:100]  # Remove special chars, limit length
 
     cmd = f'kick "{player}" {reason}' if reason else f'kick "{player}"'
     result = execute_bedrock_command(cmd)
@@ -475,10 +528,13 @@ def kick_player():
 def op_player():
     """Give operator status"""
     data = request.get_json()
-    player = data.get('player', '')
+    player = data.get('player', '').strip()
 
     if not player:
         return jsonify({'success': False, 'error': 'No player specified'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
 
     result = execute_bedrock_command(f'op "{player}"')
     return jsonify(result)
@@ -488,10 +544,13 @@ def op_player():
 def deop_player():
     """Remove operator status"""
     data = request.get_json()
-    player = data.get('player', '')
+    player = data.get('player', '').strip()
 
     if not player:
         return jsonify({'success': False, 'error': 'No player specified'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
 
     result = execute_bedrock_command(f'deop "{player}"')
     return jsonify(result)
@@ -501,13 +560,25 @@ def deop_player():
 def teleport_player():
     """Teleport player to coordinates"""
     data = request.get_json()
-    player = data.get('player', '')
-    x = data.get('x', 0)
-    y = data.get('y', 0)
-    z = data.get('z', 0)
+    player = data.get('player', '').strip()
 
     if not player:
         return jsonify({'success': False, 'error': 'No player specified'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
+
+    # Validate coordinates
+    try:
+        x = float(data.get('x', 0))
+        y = float(data.get('y', 0))
+        z = float(data.get('z', 0))
+
+        # Basic sanity checks (Bedrock coordinates range)
+        if not (-30000000 <= x <= 30000000) or not (0 <= y <= 256) or not (-30000000 <= z <= 30000000):
+            return jsonify({'success': False, 'error': 'Coordinates out of range'})
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': 'Invalid coordinate values'})
 
     result = execute_bedrock_command(f'tp "{player}" {x} {y} {z}')
     return jsonify(result)
@@ -517,12 +588,26 @@ def teleport_player():
 def give_item():
     """Give item to player"""
     data = request.get_json()
-    player = data.get('player', '')
-    item = data.get('item', '')
-    amount = data.get('amount', 1)
+    player = data.get('player', '').strip()
+    item = data.get('item', '').strip()
 
     if not player or not item:
         return jsonify({'success': False, 'error': 'Player and item required'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
+
+    # Validate item name (alphanumeric and underscore only)
+    if not re.match(r'^[a-z_]+$', item):
+        return jsonify({'success': False, 'error': 'Invalid item name'})
+
+    # Validate amount
+    try:
+        amount = int(data.get('amount', 1))
+        if amount < 1 or amount > 64:
+            return jsonify({'success': False, 'error': 'Amount must be between 1 and 64'})
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': 'Invalid amount'})
 
     result = execute_bedrock_command(f'give "{player}" {item} {amount}')
     return jsonify(result)
@@ -532,11 +617,19 @@ def give_item():
 def change_gamemode():
     """Change player gamemode"""
     data = request.get_json()
-    player = data.get('player', '')
-    gamemode = data.get('gamemode', 'survival')
+    player = data.get('player', '').strip()
+    gamemode = data.get('gamemode', 'survival').strip().lower()
 
     if not player:
         return jsonify({'success': False, 'error': 'No player specified'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
+
+    # Validate gamemode
+    valid_gamemodes = ['survival', 'creative', 'adventure', 'spectator', 's', 'c', 'a', 'sp', '0', '1', '2', '3']
+    if gamemode not in valid_gamemodes:
+        return jsonify({'success': False, 'error': 'Invalid gamemode'})
 
     result = execute_bedrock_command(f'gamemode {gamemode} "{player}"')
     return jsonify(result)
@@ -546,12 +639,26 @@ def change_gamemode():
 def give_effect():
     """Give effect to player"""
     data = request.get_json()
-    player = data.get('player', '')
-    effect = data.get('effect', '')
-    duration = data.get('duration', 30)
+    player = data.get('player', '').strip()
+    effect = data.get('effect', '').strip().lower()
 
     if not player or not effect:
         return jsonify({'success': False, 'error': 'Player and effect required'})
+
+    if not validate_minecraft_name(player):
+        return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
+
+    # Validate effect
+    if effect not in VALID_EFFECTS:
+        return jsonify({'success': False, 'error': f'Invalid effect: {effect}'})
+
+    # Validate duration
+    try:
+        duration = int(data.get('duration', 30))
+        if duration < 1 or duration > 1000000:
+            return jsonify({'success': False, 'error': 'Duration must be between 1 and 1000000 seconds'})
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': 'Invalid duration'})
 
     result = execute_bedrock_command(f'effect "{player}" {effect} {duration}')
     return jsonify(result)
@@ -568,13 +675,30 @@ def get_gamerules():
 def set_gamerule():
     """Set a gamerule"""
     data = request.get_json()
-    rule = data.get('rule', '')
-    value = data.get('value', '')
+    rule = data.get('rule', '').strip()
+    value = data.get('value', '').strip()
 
     if not rule:
         return jsonify({'success': False, 'error': 'No rule specified'})
 
-    result = execute_bedrock_command(f'gamerule {rule} {value}')
+    # Validate gamerule name
+    if rule not in VALID_GAMERULES:
+        return jsonify({'success': False, 'error': f'Invalid gamerule: {rule}'})
+
+    # Validate value (must be true/false or numeric)
+    value_lower = value.lower()
+    if value_lower in ['true', 'false']:
+        validated_value = value_lower
+    else:
+        try:
+            num_value = int(value)
+            if num_value < 0 or num_value > 100000:
+                return jsonify({'success': False, 'error': 'Numeric value must be between 0 and 100000'})
+            validated_value = str(num_value)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Value must be true, false, or a number'})
+
+    result = execute_bedrock_command(f'gamerule {rule} {validated_value}')
     return jsonify(result)
 
 @app.route('/api/backups')
@@ -765,9 +889,45 @@ def setup_welcome_kit():
             continue
         parts = line.split()
         item_name = parts[0]
+
+        # Validate item name
+        if item_name not in COMMON_WELCOME_ITEMS:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid item: {item_name}. Only common welcome items are allowed.'
+            })
+
+        # Validate amount
         amount = parts[1] if len(parts) > 1 else '1'
-        # For maps, there might be a third parameter (zoom level)
+        try:
+            amount_int = int(amount)
+            if amount_int < 1 or amount_int > 64:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid amount for {item_name}: must be 1-64'
+                })
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid amount for {item_name}: must be a number'
+            })
+
+        # Validate zoom level if present (for maps)
         zoom_level = parts[2] if len(parts) > 2 else None
+        if zoom_level is not None:
+            try:
+                zoom_int = int(zoom_level)
+                if zoom_int < 0 or zoom_int > 4:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Map zoom level must be 0-4'
+                    })
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': 'Map zoom level must be a number'
+                })
+
         items.append((item_name, amount, zoom_level))
         print(f"[Welcome Kit] Parsed item: {item_name}, amount: {amount}, zoom: {zoom_level}", flush=True)
 
