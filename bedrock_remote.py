@@ -3,6 +3,9 @@ import os
 import shlex
 import re
 
+# QNAP-specific Docker path (can be overridden via environment variable)
+DOCKER_PATH = os.getenv('DOCKER_PATH', DOCKER_PATH)
+
 class BedrockRemoteClient:
     """Client for interacting with Minecraft Bedrock server on remote host via SSH"""
     

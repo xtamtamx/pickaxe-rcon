@@ -5,6 +5,15 @@ from datetime import datetime
 import json
 import os
 
+# Common safe Minecraft commands for scheduled tasks
+SAFE_COMMANDS = [
+    'save-all', 'whitelist', 'op', 'deop', 'kick', 'ban', 'pardon',
+    'give', 'tp', 'teleport', 'gamemode', 'gamerule', 'time',
+    'weather', 'say', 'tell', 'tellraw', 'tag', 'effect', 'title',
+    'kill', 'clear', 'difficulty', 'setworldspawn', 'spawnpoint',
+    'xp', 'experience', 'enchant', 'scoreboard', 'team'
+]
+
 class TaskScheduler:
     def __init__(self, bedrock_client):
         self.scheduler = BackgroundScheduler()
@@ -32,7 +41,8 @@ class TaskScheduler:
             try:
                 with open(self.tasks_file, 'r') as f:
                     return json.load(f)
-            except:
+            except Exception as e:
+                print(f"[Scheduler] Error loading tasks: {e}")
                 return {}
         return {}
 
@@ -40,6 +50,15 @@ class TaskScheduler:
         """Save tasks to JSON file"""
         with open(self.tasks_file, 'w') as f:
             json.dump(self.tasks, f, indent=2)
+
+    def _is_safe_command(self, command):
+        """Basic validation that command starts with a known safe command"""
+        cmd_lower = command.strip().lower()
+        # Check if command starts with any safe command
+        for safe_cmd in SAFE_COMMANDS:
+            if cmd_lower.startswith(safe_cmd.lower()):
+                return True
+        return False
 
     def _execute_task(self, task_id):
         """Execute a scheduled task"""
@@ -58,9 +77,15 @@ class TaskScheduler:
             for cmd in commands:
                 cmd = cmd.strip()
                 if cmd:
-                    self.bedrock_client.send_command(cmd)
+                    if self._is_safe_command(cmd):
+                        self.bedrock_client.send_command(cmd)
+                    else:
+                        print(f"[Scheduler] Warning: Skipped potentially unsafe command: {cmd}")
         else:
-            self.bedrock_client.send_command(command)
+            if self._is_safe_command(command):
+                self.bedrock_client.send_command(command)
+            else:
+                print(f"[Scheduler] Warning: Skipped potentially unsafe command: {command}")
 
         # Update last run
         task['last_run'] = datetime.now().isoformat()
@@ -137,8 +162,8 @@ class TaskScheduler:
             # Remove from scheduler
             try:
                 self.scheduler.remove_job(task_id)
-            except:
-                pass
+            except Exception as e:
+                print(f"[Scheduler] Error removing job {task_id}: {e}")
 
             # Remove from tasks dict
             del self.tasks[task_id]
@@ -157,8 +182,8 @@ class TaskScheduler:
             else:
                 try:
                     self.scheduler.remove_job(task_id)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"[Scheduler] Error removing job {task_id}: {e}")
             return True
         return False
 
