@@ -34,6 +34,118 @@
         </div>
     </div>
 
+    <!-- Welcome Kit -->
+    <div class="mc-panel">
+        <div class="mc-panel-header">
+            🎁 New Player Welcome Kit
+            <span id="kit-status-badge" style="float: right; padding: 4px 12px; border-radius: 4px; font-size: 14px; background: #555; color: #aaa;">Loading...</span>
+        </div>
+        <div class="mc-panel-body">
+            <p style="margin-bottom: 12px; color: #ddd;">Give new players a starter kit when they first join. Select items to include:</p>
+
+            <!-- Selected Items Section -->
+            <div id="selected-items-section" style="margin-bottom: 16px;">
+                <h4 style="margin: 0 0 8px 0; color: #7cbd1e; font-size: 16px;">✓ Selected Items</h4>
+                <div id="selected-items-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; min-height: 50px; padding: 12px; background: rgba(124, 189, 30, 0.1); border-radius: 4px; border: 2px solid #7cbd1e;">
+                    <!-- Selected items will appear here dynamically -->
+                </div>
+            </div>
+
+            <!-- Map Configuration (only shown when map is checked) -->
+            <div id="map-config" style="margin-bottom: 16px; padding: 12px; background: #333; border-radius: 4px; border: 2px solid #7cbd1e;">
+                <h4 style="margin: 0 0 12px 0; color: #7cbd1e;">🗺️ Map Configuration</h4>
+                <div style="display: grid; gap: 12px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; color: #ddd;">Map Type:</label>
+                        <select id="map-type" class="mc-input" style="width: 100%;">
+                            <option value="filled_map" selected>Locator Map (shows player position)</option>
+                            <option value="map">Empty Map (needs to be filled)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; color: #ddd;">Zoom Level (0 = closest, 4 = farthest):</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="range" id="map-zoom" min="0" max="4" value="0" style="flex: 1;" oninput="document.getElementById('zoom-value').textContent = this.value">
+                            <span id="zoom-value" style="min-width: 30px; color: #7cbd1e; font-weight: bold;">0</span>
+                        </div>
+                        <small style="color: #aaa;">Level 0: 128×128 blocks | Level 4: 2048×2048 blocks</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Available Items Section -->
+            <div id="available-items-section">
+                <h4 style="margin: 0 0 8px 0; color: #aaa; font-size: 16px;">Available Items</h4>
+                <div id="available-items-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                    <!-- All items start here -->
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-map" checked style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🗺️ Map</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-compass" checked style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🧭 Compass</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-bread" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🍞 Bread (10)</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-wooden-pickaxe" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>⛏️ Wooden Pickaxe</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-torch" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🔦 Torch (16)</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-apple" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🍎 Apple (5)</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-wooden-axe" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🪓 Wooden Axe</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-wooden-sword" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>⚔️ Wooden Sword</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-oak-log" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🪵 Oak Log (16)</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-cobblestone" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🪨 Cobblestone (32)</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-bed" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>🛏️ Bed</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-crafting-table" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>📦 Crafting Table</span>
+                    </label>
+                    <label class="kit-item-label" style="display: flex; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 4px; cursor: pointer;">
+                        <input type="checkbox" id="kit-chest" style="margin-right: 8px;" onchange="updateItemSections()">
+                        <span>📦 Chest</span>
+                    </label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button class="mc-button mc-button-green" onclick="setupWelcomeKit()" style="flex: 1;">
+                    ✓ Enable Welcome Kit
+                </button>
+                <button class="mc-button mc-button-red" onclick="disableWelcomeKit()" style="flex: 1;">
+                    ✗ Disable Welcome Kit
+                </button>
+            </div>
+
+            <div id="welcome-kit-status" style="margin-top: 12px; padding: 8px; border-radius: 4px; display: none;"></div>
+        </div>
+    </div>
+
     <!-- Player Actions -->
     <div class="mc-panel">
         <div class="mc-panel-header">
@@ -393,9 +505,271 @@ function giveEffect() {
     });
 }
 
+// Welcome Kit Functions
+function toggleMapConfig() {
+    const mapCheckbox = document.getElementById('kit-map');
+    const mapConfig = document.getElementById('map-config');
+    mapConfig.style.display = mapCheckbox.checked ? 'block' : 'none';
+}
+
+function updateItemSections() {
+    console.log('[updateItemSections] Called');
+    const selectedGrid = document.getElementById('selected-items-grid');
+    const availableGrid = document.getElementById('available-items-grid');
+
+    if (!selectedGrid || !availableGrid) {
+        console.error('[updateItemSections] Could not find grids');
+        return;
+    }
+
+    // Get all item labels - convert to array to avoid live collection issues
+    const allLabels = Array.from(document.querySelectorAll('.kit-item-label'));
+    console.log('[updateItemSections] Found', allLabels.length, 'labels');
+
+    // Clear both sections
+    selectedGrid.innerHTML = '';
+    availableGrid.innerHTML = '';
+
+    let selectedCount = 0;
+    let availableCount = 0;
+
+    // Sort items into selected vs available - MOVE elements, don't clone
+    allLabels.forEach(label => {
+        const checkbox = label.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.checked) {
+            // Move to selected section
+            selectedGrid.appendChild(label);
+            selectedCount++;
+        } else {
+            // Move to available section
+            availableGrid.appendChild(label);
+            availableCount++;
+        }
+    });
+
+    console.log('[updateItemSections] Selected:', selectedCount, 'Available:', availableCount);
+
+    // Update map config visibility
+    toggleMapConfig();
+}
+
+function setupWelcomeKit() {
+    // Item mapping: checkbox ID -> [minecraft_item_name, amount]
+    const itemMap = {
+        'kit-compass': ['compass', 1],
+        'kit-bread': ['bread', 10],
+        'kit-apple': ['apple', 5],
+        'kit-wooden-pickaxe': ['wooden_pickaxe', 1],
+        'kit-wooden-axe': ['wooden_axe', 1],
+        'kit-wooden-sword': ['wooden_sword', 1],
+        'kit-oak-log': ['oak_log', 16],
+        'kit-cobblestone': ['cobblestone', 32],
+        'kit-torch': ['torch', 16],
+        'kit-bed': ['bed', 1],
+        'kit-crafting-table': ['crafting_table', 1],
+        'kit-chest': ['chest', 1]
+    };
+
+    // Collect checked items
+    const selectedItems = [];
+
+    // Handle map separately with zoom level
+    const mapCheckbox = document.getElementById('kit-map');
+    if (mapCheckbox && mapCheckbox.checked) {
+        const mapType = document.getElementById('map-type').value;
+        const zoomLevel = document.getElementById('map-zoom').value;
+        // Bedrock accepts: give @p filled_map 1 <zoom_level>
+        selectedItems.push(`${mapType} 1 ${zoomLevel}`);
+    }
+
+    for (const [checkboxId, itemData] of Object.entries(itemMap)) {
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox && checkbox.checked) {
+            selectedItems.push(`${itemData[0]} ${itemData[1]}`);
+        }
+    }
+
+    if (selectedItems.length === 0) {
+        showWelcomeKitStatus('Please select at least one item', false);
+        return;
+    }
+
+    showWelcomeKitStatus('Setting up welcome kit...', true);
+
+    // Join items with newlines for the backend
+    const itemsText = selectedItems.join('\n');
+
+    console.log('Sending items:', itemsText);
+
+    fetch('/api/welcome-kit/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsText })
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response data:', data);
+        if (data.success) {
+            showWelcomeKitStatus(`✓ Welcome kit enabled with ${selectedItems.length} items! New players will receive them automatically.`, true);
+            checkWelcomeKitStatus();  // Update the badge
+        } else {
+            showWelcomeKitStatus('✗ Failed: ' + (data.error || 'Unknown error'), false);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showWelcomeKitStatus('✗ Error: ' + error.message, false);
+    });
+}
+
+function disableWelcomeKit() {
+    fetch('/api/welcome-kit/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showWelcomeKitStatus('✓ Welcome kit disabled', true);
+            checkWelcomeKitStatus();  // Update the badge
+        } else {
+            showWelcomeKitStatus('✗ Failed to disable: ' + data.error, false);
+        }
+    });
+}
+
+function checkWelcomeKitStatus() {
+    fetch('/api/welcome-kit/status')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('kit-status-badge');
+            const enableButton = document.querySelector('button[onclick="setupWelcomeKit()"]');
+
+            if (data.enabled) {
+                badge.textContent = '✓ ENABLED';
+                badge.style.background = '#4CAF50';
+                badge.style.color = '#fff';
+
+                // Change button text to "Update" when kit is enabled
+                if (enableButton) {
+                    enableButton.innerHTML = '🔄 Update Welcome Kit';
+                }
+
+                // Show items if available
+                if (data.items && data.items.length > 0) {
+                    badge.title = 'Items: ' + data.items.join(', ');
+
+                    // Restore checkbox states based on active kit
+                    restoreCheckboxStates(data.items, data.map_zoom);
+                }
+            } else {
+                badge.textContent = 'DISABLED';
+                badge.style.background = '#555';
+                badge.style.color = '#aaa';
+                badge.title = '';
+
+                // Reset button text to "Enable" when kit is disabled
+                if (enableButton) {
+                    enableButton.innerHTML = '✓ Enable Welcome Kit';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error checking welcome kit status:', error);
+            const badge = document.getElementById('kit-status-badge');
+            badge.textContent = 'ERROR';
+            badge.style.background = '#f44336';
+            badge.style.color = '#fff';
+        });
+}
+
+function restoreCheckboxStates(activeItems, mapZoom) {
+    console.log('[Welcome Kit] Restoring checkbox states for items:', activeItems);
+    console.log('[Welcome Kit] Map zoom level:', mapZoom);
+
+    // Parse active items (format: "item_name xAmount")
+    const activeItemNames = activeItems.map(item => {
+        const parts = item.split(' ');
+        return parts[0]; // Get just the item name
+    });
+
+    console.log('[Welcome Kit] Parsed item names:', activeItemNames);
+
+    // Map of checkbox IDs to item names - MUST match exactly what the API returns
+    const checkboxMap = {
+        'kit-map': 'filled_map',
+        'kit-compass': 'compass',
+        'kit-bread': 'bread',
+        'kit-apple': 'apple',
+        'kit-wooden-pickaxe': 'wooden_pickaxe',
+        'kit-wooden-axe': 'wooden_axe',
+        'kit-wooden-sword': 'wooden_sword',
+        'kit-oak-log': 'oak_log',
+        'kit-cobblestone': 'cobblestone',
+        'kit-torch': 'torch',
+        'kit-bed': 'bed',
+        'kit-crafting-table': 'crafting_table',
+        'kit-chest': 'chest'
+    };
+
+    // First, uncheck all checkboxes
+    for (const checkboxId in checkboxMap) {
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+    }
+
+    // Then check only the active items
+    for (const checkboxId in checkboxMap) {
+        const itemName = checkboxMap[checkboxId];
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox && activeItemNames.includes(itemName)) {
+            console.log('[Welcome Kit] Checking checkbox:', checkboxId, 'for item:', itemName);
+            checkbox.checked = true;
+        }
+    }
+
+    // Restore map zoom level if present
+    if (mapZoom !== null && mapZoom !== undefined) {
+        const zoomSlider = document.getElementById('map-zoom');
+        const zoomValue = document.getElementById('zoom-value');
+        if (zoomSlider && zoomValue) {
+            zoomSlider.value = mapZoom;
+            zoomValue.textContent = mapZoom;
+            console.log('[Welcome Kit] Restored map zoom to:', mapZoom);
+        }
+    }
+
+    console.log('[Welcome Kit] Checkbox restoration complete');
+
+    // Update item sections to move checked items to selected area
+    updateItemSections();
+}
+
+function showWelcomeKitStatus(msg, success) {
+    const statusDiv = document.getElementById('welcome-kit-status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.backgroundColor = success ? '#7cbd1e' : '#ff5555';
+    statusDiv.style.color = success ? '#000' : '#fff';
+    statusDiv.textContent = msg;
+
+    setTimeout(() => {
+        statusDiv.style.display = 'none';
+    }, 8000);
+}
+
 // Load on page load
 loadOnlinePlayers();
 loadOps();
+checkWelcomeKitStatus();
+updateItemSections();  // Initialize item sections (also calls toggleMapConfig)
 
 // Auto-refresh every 10 seconds
 setInterval(loadOnlinePlayers, 10000);

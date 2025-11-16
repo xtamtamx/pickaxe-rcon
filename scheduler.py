@@ -49,9 +49,18 @@ class TaskScheduler:
 
         print(f"[Scheduler] Executing task: {task['name']}")
 
-        # Execute the command
+        # Execute the command(s)
         command = task['command']
-        self.bedrock_client.send_command(command)
+
+        # Support multiple commands separated by ' && '
+        if ' && ' in command:
+            commands = command.split(' && ')
+            for cmd in commands:
+                cmd = cmd.strip()
+                if cmd:
+                    self.bedrock_client.send_command(cmd)
+        else:
+            self.bedrock_client.send_command(command)
 
         # Update last run
         task['last_run'] = datetime.now().isoformat()
