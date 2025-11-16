@@ -1,13 +1,13 @@
 # Cloudflare Tunnel Setup Guide
 
 This guide will help you expose both your Minecraft admin panel and the Minecraft server itself through Cloudflare Tunnel, allowing you to:
-- Manage your server from anywhere at `https://admin.hellocolello.com`
-- Play Minecraft remotely at `play.hellocolello.com:19132`
+- Manage your server from anywhere at `https://admin.yourdomain.com`
+- Play Minecraft remotely at `play.yourdomain.com:19132`
 
 ## Prerequisites
 
-- Domain `hellocolello.com` configured in Cloudflare
-- QNAP NAS with Minecraft server running at `192.168.86.149:19132`
+- Domain `yourdomain.com` configured in Cloudflare
+- QNAP NAS with Minecraft server running at `your.server.ip:19132`
 - Admin panel running at `localhost:41114` on QNAP
 
 ---
@@ -78,12 +78,12 @@ credentials-file: /root/.cloudflared/<TUNNEL-ID>.json
 
 ingress:
   # Admin Panel - Web interface
-  - hostname: admin.hellocolello.com
+  - hostname: admin.yourdomain.com
     service: http://localhost:41114
 
   # Minecraft Bedrock Server - Game server
-  - hostname: play.hellocolello.com
-    service: tcp://192.168.86.149:19132
+  - hostname: play.yourdomain.com
+    service: tcp://your.server.ip:19132
 
   # Catch-all
   - service: http_status:404
@@ -95,8 +95,8 @@ ingress:
 
 Create DNS records pointing to your tunnel:
 ```bash
-cloudflared tunnel route dns pickaxe-rcon admin.hellocolello.com
-cloudflared tunnel route dns pickaxe-rcon play.hellocolello.com
+cloudflared tunnel route dns pickaxe-rcon admin.yourdomain.com
+cloudflared tunnel route dns pickaxe-rcon play.yourdomain.com
 ```
 
 This automatically creates CNAME records in Cloudflare DNS.
@@ -112,17 +112,17 @@ cloudflared tunnel run pickaxe-rcon
 
 You should see:
 ```
-Connection registered for admin.hellocolello.com
-Connection registered for play.hellocolello.com
+Connection registered for admin.yourdomain.com
+Connection registered for play.yourdomain.com
 ```
 
 **Test the admin panel:**
-- Open browser: `https://admin.hellocolello.com`
+- Open browser: `https://admin.yourdomain.com`
 - You should see the login page (HTTPS is automatic!)
 
 **Test Minecraft connection:**
 - Open Minecraft Bedrock Edition
-- Add server: `play.hellocolello.com` port `19132`
+- Add server: `play.yourdomain.com` port `19132`
 - Try to connect
 
 Press `Ctrl+C` to stop the tunnel.
@@ -174,7 +174,7 @@ If you experience connection issues with the game server, consider these options
 - Requires Cloudflare Pro plan ($20/month)
 
 **Option B: Traditional Port Forwarding**
-- Forward UDP port 19132 on your router to `192.168.86.149:19132`
+- Forward UDP port 19132 on your router to `your.server.ip:19132`
 - Use dynamic DNS (like DuckDNS) if you don't have a static IP
 - Free, but requires router configuration
 
@@ -190,7 +190,7 @@ If you experience connection issues with the game server, consider these options
 I recommend **Option C**:
 
 ### For Admin Panel (Keep Cloudflare Tunnel):
-- `https://admin.hellocolello.com` → Pickaxe RCON panel
+- `https://admin.yourdomain.com` → Pickaxe RCON panel
 - Secure, HTTPS, works perfectly
 
 ### For Minecraft Server (Use Port Forwarding):
@@ -205,7 +205,7 @@ credentials-file: /root/.cloudflared/<TUNNEL-ID>.json
 
 ingress:
   # Admin Panel only
-  - hostname: admin.hellocolello.com
+  - hostname: admin.yourdomain.com
     service: http://localhost:41114
 
   # Catch-all
@@ -214,7 +214,7 @@ ingress:
 
 Then just route the DNS:
 ```bash
-cloudflared tunnel route dns pickaxe-rcon admin.hellocolello.com
+cloudflared tunnel route dns pickaxe-rcon admin.yourdomain.com
 ```
 
 ---
@@ -236,7 +236,7 @@ curl http://localhost:41114
 ### Minecraft connection fails
 - Remember: TCP tunnel has limitations with Bedrock
 - Check server is running: `docker ps | grep minecraft`
-- Verify server IP: `192.168.86.149:19132`
+- Verify server IP: `your.server.ip:19132`
 - Consider using port forwarding instead
 
 ### DNS not resolving
@@ -260,7 +260,7 @@ Since you're exposing your admin panel to the internet:
 For extra security, you can add Cloudflare Access (free for up to 50 users):
 
 1. Go to Cloudflare Dashboard → Zero Trust
-2. Add an Access application for `admin.hellocolello.com`
+2. Add an Access application for `admin.yourdomain.com`
 3. Require email authentication before accessing the panel
 
 This adds a second layer of authentication before anyone can even see your login page!
