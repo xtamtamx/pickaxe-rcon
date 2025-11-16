@@ -6,9 +6,9 @@ import re
 class BedrockRemoteClient:
     """Client for interacting with Minecraft Bedrock server on remote host via SSH"""
     
-    def __init__(self, host='192.168.86.149', container_name=None):
+    def __init__(self, host='localhost', container_name=None):
         self.game_host = host  # Where the game is accessible
-        self.ssh_host = os.getenv('SSH_HOST', '192.168.86.82')  # Where to SSH to
+        self.ssh_host = os.getenv('SSH_HOST', 'localhost')  # Where to SSH to
         self.container_name = container_name or os.getenv('CONTAINER_NAME', 'minecraft-bedrock-server')
         self.ssh_user = os.getenv('SSH_USER', 'admin')  # Default QNAP user
     
@@ -530,8 +530,10 @@ class BedrockRemoteClient:
         else:
             return {'success': False, 'error': 'Failed to delete backup'}
 
-    def create_new_world(self, world_seed=None):
+    def create_new_world(self, world_seed=None, auto_restart=True):
         """Delete current world and create a new one with optional seed"""
+        print(f"[create_new_world] Called with seed: {world_seed}, auto_restart: {auto_restart}", flush=True)
+
         # Get world name from server.properties
         props_result = self.get_server_properties()
         if not props_result['success']:
@@ -539,15 +541,40 @@ class BedrockRemoteClient:
 
         world_name = props_result['properties'].get('level-name', 'Bedrock level')
 
+        # If a seed is provided, update server.properties FIRST
+        if world_seed:
+            print(f"[create_new_world] Updating seed to: {world_seed}", flush=True)
+            # Update the level-seed property
+            update_result = self.update_server_properties({'level-seed': str(world_seed)})
+            print(f"[create_new_world] Update result: {update_result}", flush=True)
+            if not update_result['success']:
+                return {'success': False, 'error': f'Failed to update seed in server.properties: {update_result.get("error", "Unknown error")}'}
+
         # Remove current world
+        print(f"[create_new_world] Deleting world: {world_name}", flush=True)
         remove_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -i {self.container_name} sh -c "rm -rf /data/worlds/\\"{world_name}\\""'
         result = self._ssh_command(remove_cmd)
 
         if result and result.returncode == 0:
-            message = 'Current world deleted. New world will generate on next server start.'
-            if world_seed:
-                message += f' Seed: {world_seed}'
-            return {'success': True, 'message': message}
+            # If auto_restart is enabled, restart the server to generate new world
+            if auto_restart:
+                print(f"[create_new_world] Auto-restarting server...", flush=True)
+                restart_result = self.restart_container()
+                if restart_result['success']:
+                    message = 'World deleted and server restarted! New world is generating...'
+                    if world_seed:
+                        message += f' With seed: {world_seed}'
+                    return {'success': True, 'message': message}
+                else:
+                    message = 'World deleted but failed to restart server. Please restart manually.'
+                    if world_seed:
+                        message += f' Seed {world_seed} is set and ready.'
+                    return {'success': False, 'error': message}
+            else:
+                message = 'Current world deleted. New world will generate on next server start.'
+                if world_seed:
+                    message += f' With seed: {world_seed}'
+                return {'success': True, 'message': message}
         else:
             error_msg = result.stderr if result else 'Unknown error'
             return {'success': False, 'error': f'Failed to delete world: {error_msg}'}

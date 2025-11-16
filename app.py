@@ -18,6 +18,8 @@ load_dotenv()
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for development
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Load configuration
@@ -62,7 +64,7 @@ def initialize_bedrock_client():
 
     server_config = config.get_server_config()
     container_name = server_config.get('container_name', 'minecraft-bedrock')
-    server_host = server_config.get('server_host', '192.168.86.149')
+    server_host = server_config.get('server_host', 'localhost')
 
     ssh_key_path = os.path.expanduser('~/.ssh/minecraft_panel_rsa')
     if os.path.exists(ssh_key_path):
@@ -743,6 +745,121 @@ def test_connection_api():
             return jsonify({'success': False, 'message': 'Container is not running or not accessible'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Connection failed: {str(e)}'})
+
+@app.route('/api/welcome-kit/setup', methods=['POST'])
+@login_required
+def setup_welcome_kit():
+    """Set up automated welcome kit for new players"""
+    data = request.get_json()
+    items_text = data.get('items', '').strip()
+
+    if not items_text:
+        return jsonify({'success': False, 'error': 'No items specified'})
+
+    # Parse items (one per line, format: "item_name [amount] [zoom_level_for_maps]")
+    print(f"[Welcome Kit] Received items_text: {items_text}", flush=True)
+    items = []
+    for line in items_text.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        item_name = parts[0]
+        amount = parts[1] if len(parts) > 1 else '1'
+        # For maps, there might be a third parameter (zoom level)
+        zoom_level = parts[2] if len(parts) > 2 else None
+        items.append((item_name, amount, zoom_level))
+        print(f"[Welcome Kit] Parsed item: {item_name}, amount: {amount}, zoom: {zoom_level}", flush=True)
+
+    if not items:
+        return jsonify({'success': False, 'error': 'No valid items found'})
+
+    # Create commands for the welcome kit
+    # This uses Bedrock commands to give items to players who don't have a "welcomed" tag
+    commands = []
+    for item_name, amount, zoom_level in items:
+        if zoom_level is not None:
+            # For maps with zoom level: give @a[tag=!welcomed] filled_map 1 2
+            cmd = f'give @a[tag=!welcomed] {item_name} {amount} {zoom_level}'
+            commands.append(cmd)
+            print(f"[Welcome Kit] Command with zoom: {cmd}", flush=True)
+        else:
+            cmd = f'give @a[tag=!welcomed] {item_name} {amount}'
+            commands.append(cmd)
+            print(f"[Welcome Kit] Command: {cmd}", flush=True)
+
+    # Add tag to mark players as welcomed
+    commands.append('tag @a[tag=!welcomed] add welcomed')
+
+    # Combine into single command for scheduler
+    full_command = ' && '.join(commands)
+
+    # Check if welcome kit task already exists and remove it
+    existing_tasks = task_scheduler.get_tasks()
+    for task_id, task in list(existing_tasks.items()):
+        if task['name'] == 'Welcome Kit':
+            task_scheduler.remove_task(task_id)
+
+    # Create scheduled task (runs every 30 seconds to check for new players)
+    task_id = task_scheduler.add_task(
+        'Welcome Kit',
+        full_command,
+        'interval',
+        interval_minutes=0.5  # Every 30 seconds
+    )
+
+    return jsonify({
+        'success': True,
+        'message': f'Welcome kit enabled with {len(items)} items',
+        'task_id': task_id
+    })
+
+@app.route('/api/welcome-kit/disable', methods=['POST'])
+@login_required
+def disable_welcome_kit():
+    """Disable the welcome kit scheduled task"""
+    existing_tasks = task_scheduler.get_tasks()
+    for task_id, task in list(existing_tasks.items()):
+        if task['name'] == 'Welcome Kit':
+            if task_scheduler.remove_task(task_id):
+                return jsonify({'success': True, 'message': 'Welcome kit disabled'})
+
+    return jsonify({'success': False, 'error': 'Welcome kit task not found'})
+
+@app.route('/api/welcome-kit/status', methods=['GET'])
+@login_required
+def welcome_kit_status():
+    """Check if welcome kit is enabled"""
+    existing_tasks = task_scheduler.get_tasks()
+    for task_id, task in existing_tasks.items():
+        if task['name'] == 'Welcome Kit':
+            # Extract items from the command
+            command = task['command']
+            # Commands are like: give @a[tag=!welcomed] map 1 && give @a[tag=!welcomed] compass 1 && ...
+            # OR with zoom level: give @a[tag=!welcomed] filled_map 1 2
+            items = []
+            map_zoom = None
+            for cmd in command.split(' && '):
+                if cmd.startswith('give @a[tag=!welcomed]'):
+                    parts = cmd.split()
+                    if len(parts) >= 3:
+                        item_name = parts[2]
+                        amount = parts[3] if len(parts) > 3 else '1'
+                        # Check if this is a map with zoom level
+                        if item_name in ['filled_map', 'map'] and len(parts) >= 5:
+                            map_zoom = parts[4]
+                            items.append(f"{item_name} x{amount}")
+                        else:
+                            items.append(f"{item_name} x{amount}")
+
+            return jsonify({
+                'enabled': True,
+                'task_id': task_id,
+                'items': items,
+                'map_zoom': map_zoom
+            })
+
+    return jsonify({'enabled': False})
 
 @socketio.on('connect')
 @login_required

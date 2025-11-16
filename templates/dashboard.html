@@ -179,7 +179,7 @@ function updateStatus() {
                     let errorMsg = data.error;
                     if (data.error.includes('Connection refused')) {
                         errorMsg = `Cannot connect to RCON port ${data.port || 25575}. Please verify:
-• Server is running at ${data.host || '192.168.86.149'}
+• Server is running at ${data.host || 'your.server.ip'}
 • RCON is enabled in server.properties
 • RCON port is ${data.port || 25575}
 • No firewall is blocking the connection`;

@@ -4,7 +4,7 @@ import os
 class BedrockSimpleClient:
     """Simple client that assumes the Minecraft server is accessible at the configured host"""
     
-    def __init__(self, host='192.168.86.149', container_name='minecraft-bedrock'):
+    def __init__(self, host='localhost', container_name='minecraft-bedrock'):
         self.host = host
         self.container_name = container_name
         self.game_port = 19132
