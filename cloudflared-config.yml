@@ -1,17 +1,19 @@
 # Cloudflare Tunnel Configuration for Pickaxe RCON + Minecraft Server
 # Replace <TUNNEL-ID> with your actual tunnel ID from: cloudflared tunnel create pickaxe-rcon
+# Replace yourdomain.com with your actual domain
+# Replace your.server.ip with your Minecraft server IP
 
 tunnel: <TUNNEL-ID>
 credentials-file: /root/.cloudflared/<TUNNEL-ID>.json
 
 ingress:
-  # Admin Panel - Web interface at https://admin.hellocolello.com
-  - hostname: admin.hellocolello.com
+  # Admin Panel - Web interface at https://admin.yourdomain.com
+  - hostname: admin.yourdomain.com
     service: http://localhost:41114
 
-  # Minecraft Bedrock Server - Play remotely at play.hellocolello.com:19132
-  - hostname: play.hellocolello.com
-    service: tcp://192.168.86.149:19132
+  # Minecraft Bedrock Server - Play remotely at play.yourdomain.com:19132
+  - hostname: play.yourdomain.com
+    service: tcp://your.server.ip:19132
 
   # Catch-all rule (required)
   - service: http_status:404
