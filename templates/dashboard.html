@@ -31,7 +31,11 @@
                     <p style="font-size: 24px;">Status: <span id="status-text" class="mc-badge mc-badge-info">Checking...</span></p>
                     <p class="player-count">👥 <span id="player-count">-</span></p>
                 </div>
-                <button class="mc-button" onclick="updateStatus()" style="width: 100%; margin-top: 16px;">
+                <div id="version-info" style="margin-top: 12px; padding: 10px; background: #555; border-radius: 4px;">
+                    <div style="font-size: 16px; color: #aaa;">Version: <span id="current-version">Checking...</span></div>
+                    <div id="version-status" style="margin-top: 6px; font-size: 14px;"></div>
+                </div>
+                <button class="mc-button" onclick="updateStatus(); checkVersion();" style="width: 100%; margin-top: 16px;">
                     🔄 Refresh
                 </button>
                 <button class="mc-button mc-button-blue" onclick="testConnection()" style="width: 100%; margin-top: 8px;">
@@ -244,6 +248,41 @@ function testConnection() {
             addConsoleMessage('Test failed: ' + error, 'error');
         });
 }
+
+function checkVersion() {
+    fetch('/api/version')
+        .then(response => response.json())
+        .then(data => {
+            const currentVersionEl = document.getElementById('current-version');
+            const versionStatusEl = document.getElementById('version-status');
+
+            if (data.current_version) {
+                currentVersionEl.textContent = data.current_version;
+                currentVersionEl.style.color = '#7cbd1e';
+            } else {
+                currentVersionEl.textContent = 'Unknown';
+                currentVersionEl.style.color = '#aaa';
+            }
+
+            if (data.update_available && data.latest_version) {
+                versionStatusEl.innerHTML = `<span style="color: #ffaa00;">⚠️ Update available: ${data.latest_version}</span>`;
+            } else if (data.latest_version && data.current_version) {
+                versionStatusEl.innerHTML = `<span style="color: #7cbd1e;">✓ Up to date</span>`;
+            } else if (data.latest_version) {
+                versionStatusEl.innerHTML = `<span style="color: #aaa;">Latest: ${data.latest_version}</span>`;
+            } else {
+                versionStatusEl.innerHTML = `<span style="color: #aaa;">Could not check for updates</span>`;
+            }
+        })
+        .catch(error => {
+            console.error('Version check failed:', error);
+            document.getElementById('current-version').textContent = 'Error';
+            document.getElementById('version-status').innerHTML = '';
+        });
+}
+
+// Check version on page load
+checkVersion();
 
 // Update status every 10 seconds
 setInterval(updateStatus, 10000);

@@ -111,8 +111,8 @@ function applyTemplate(template) {
             interval: 30
         },
         'backup-12hr': {
-            name: '12 Hour World Backup',
-            command: 'say Creating automatic backup...',
+            name: 'Auto Backup (12hr)',
+            command: '@backup',
             type: 'interval',
             interval: 720
         },
@@ -123,10 +123,10 @@ function applyTemplate(template) {
             interval: 60
         },
         'backup-daily': {
-            name: 'Daily Backup Reminder',
-            command: 'say Remember to backup the world!',
+            name: 'Daily Auto Backup',
+            command: '@backup',
             type: 'cron',
-            cron: '0 0 * * *'
+            cron: '0 4 * * *'
         },
         'restart-warn': {
             name: 'Restart Warning',

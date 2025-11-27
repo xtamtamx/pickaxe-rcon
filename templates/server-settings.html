@@ -527,7 +527,9 @@ document.getElementById('settings-form').addEventListener('submit', function(e) 
         if (data.success) {
             msgDiv.style.backgroundColor = '#7cbd1e';
             msgDiv.style.color = '#000';
-            msgDiv.innerHTML = '✓ ' + data.message + '<br><strong>Note: You must restart the server for changes to take effect!</strong>';
+            msgDiv.innerHTML = '✓ ' + data.message;
+            // Trigger the restart alert banner
+            setRestartNeeded();
         } else {
             msgDiv.style.backgroundColor = '#ff5555';
             msgDiv.style.color = '#fff';
@@ -536,7 +538,7 @@ document.getElementById('settings-form').addEventListener('submit', function(e) 
 
         setTimeout(() => {
             msgDiv.style.display = 'none';
-        }, 8000);
+        }, 5000);
     });
 });
 

@@ -4,7 +4,7 @@ import shlex
 import re
 
 # QNAP-specific Docker path (can be overridden via environment variable)
-DOCKER_PATH = os.getenv('DOCKER_PATH', DOCKER_PATH)
+DOCKER_PATH = os.getenv('DOCKER_PATH', '/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker')
 
 class BedrockRemoteClient:
     """Client for interacting with Minecraft Bedrock server on remote host via SSH"""
@@ -172,7 +172,8 @@ class BedrockRemoteClient:
     
     def get_logs(self, lines=50):
         """Get recent server logs"""
-        docker_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker logs --tail {lines} {self.container_name}'
+        # Use 2>&1 to capture stderr (where startup/version info goes) along with stdout
+        docker_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker logs --tail {lines} {self.container_name} 2>&1'
         result = self._ssh_command(docker_cmd)
 
         if result and result.returncode == 0:
@@ -739,21 +740,24 @@ class BedrockLocalClient:
             return {'success': False, 'error': str(e)}
 
     def get_whitelist(self):
-        """Read whitelist.json from container"""
+        """Read allowlist.json from container (Bedrock uses allowlist not whitelist)"""
         try:
             import json
-            docker_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec {self.container_name} cat /data/whitelist.json'
-            result = self._ssh_command(docker_cmd)
+            result = subprocess.run(
+                ['docker', 'exec', '-i', self.container_name, 'cat', '/data/allowlist.json'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
 
-            if result and result.returncode == 0:
+            if result.returncode == 0:
                 try:
                     whitelist = json.loads(result.stdout)
                     return {'success': True, 'whitelist': whitelist}
                 except json.JSONDecodeError:
                     return {'success': True, 'whitelist': []}
             else:
-                error_msg = result.stderr if result else 'SSH command failed'
-                return {'success': False, 'error': f'Failed to read whitelist: {error_msg}'}
+                return {'success': False, 'error': f'Failed to read whitelist: {result.stderr}'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
@@ -761,18 +765,21 @@ class BedrockLocalClient:
         """Read permissions.json from container"""
         try:
             import json
-            docker_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec {self.container_name} cat /data/permissions.json'
-            result = self._ssh_command(docker_cmd)
+            result = subprocess.run(
+                ['docker', 'exec', '-i', self.container_name, 'cat', '/data/permissions.json'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
 
-            if result and result.returncode == 0:
+            if result.returncode == 0:
                 try:
                     ops = json.loads(result.stdout)
                     return {'success': True, 'ops': ops}
                 except json.JSONDecodeError:
                     return {'success': True, 'ops': []}
             else:
-                error_msg = result.stderr if result else 'SSH command failed'
-                return {'success': False, 'error': f'Failed to read permissions: {error_msg}'}
+                return {'success': False, 'error': f'Failed to read permissions: {result.stderr}'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 

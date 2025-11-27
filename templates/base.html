@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#7cbd1e">
     <title>{% block title %}Minecraft Bedrock Panel{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/minecraft.css">
+    <link rel="stylesheet" href="/static/css/minecraft.css?v=1006">
     <link rel="manifest" href="/static/manifest.json">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     {% block extra_css %}{% endblock %}
@@ -26,25 +26,25 @@
                 <a href="/" class="mc-button mc-button-blue nav-btn">Console</a>
                 <a href="/players" class="mc-button nav-btn">Players</a>
                 <a href="/worlds" class="mc-button mc-button-green nav-btn">Worlds</a>
-                <div class="nav-dropdown">
-                    <button class="mc-button nav-btn dropdown-toggle" onclick="toggleDropdown(event)">
-                        More ▾
-                    </button>
-                    <div class="dropdown-menu">
-                        <a href="/performance" class="dropdown-item">📊 Performance</a>
-                        <a href="/logs" class="dropdown-item">📋 Logs</a>
-                        <a href="/scheduler" class="dropdown-item">⏰ Scheduler</a>
-                        <a href="/server-settings" class="dropdown-item">⚙️ Settings</a>
-                        <a href="/whitelist" class="dropdown-item">📝 Whitelist</a>
-                        <a href="/server-control" class="dropdown-item">🎛️ Server Control</a>
-                        <div class="dropdown-divider"></div>
-                        <a href="/connection-settings" class="dropdown-item">🔧 Connection</a>
-                    </div>
+            </div>
+            <div class="nav-dropdown">
+                <button class="mc-button nav-btn dropdown-toggle" onclick="toggleDropdown(event)">
+                    More &#9660;
+                </button>
+                <div class="dropdown-menu">
+                    <a href="/performance" class="dropdown-item">Performance</a>
+                    <a href="/logs" class="dropdown-item">Logs</a>
+                    <a href="/scheduler" class="dropdown-item">Scheduler</a>
+                    <a href="/server-settings" class="dropdown-item">Settings</a>
+                    <a href="/whitelist" class="dropdown-item">Whitelist</a>
+                    <a href="/server-control" class="dropdown-item">Server Control</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="/connection-settings" class="dropdown-item">Connection</a>
                 </div>
             </div>
             <div class="nav-actions">
                 <span class="server-ip show-desktop">
-                    🖥️ {{ rcon_host or 'your.server.ip' }}
+                    {{ rcon_host or 'your.server.ip' }}
                 </span>
                 <button class="mc-button mc-button-red" onclick="location.href='/logout'">
                     Logout
@@ -52,6 +52,19 @@
             </div>
         </div>
     </nav>
+
+    <!-- Restart Required Alert -->
+    <div id="restart-alert" class="restart-alert" style="display: none;">
+        <div class="restart-alert-content">
+            <span>Server settings changed. Restart required to apply changes.</span>
+            <button class="mc-button mc-button-green restart-alert-btn" onclick="restartServerFromAlert()">
+                Restart Now
+            </button>
+            <button class="mc-button restart-alert-dismiss" onclick="dismissRestartAlert()">
+                X
+            </button>
+        </div>
+    </div>
 
     <div style="max-width: 1400px; margin: 20px auto; padding: 0 20px;">
         {% block content %}{% endblock %}
@@ -85,6 +98,53 @@
         document.addEventListener('click', function() {
             document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
         });
+
+        // Restart alert functions
+        function checkRestartNeeded() {
+            if (localStorage.getItem('restartNeeded') === 'true') {
+                document.getElementById('restart-alert').style.display = 'block';
+            }
+        }
+
+        function setRestartNeeded() {
+            localStorage.setItem('restartNeeded', 'true');
+            document.getElementById('restart-alert').style.display = 'block';
+        }
+
+        function clearRestartNeeded() {
+            localStorage.removeItem('restartNeeded');
+            document.getElementById('restart-alert').style.display = 'none';
+        }
+
+        function dismissRestartAlert() {
+            document.getElementById('restart-alert').style.display = 'none';
+        }
+
+        function restartServerFromAlert() {
+            if (!confirm('Are you sure you want to restart the server? All players will be disconnected.')) {
+                return;
+            }
+
+            fetch('/api/server/restart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    clearRestartNeeded();
+                    alert('Server is restarting. Please wait a moment for it to come back online.');
+                } else {
+                    alert('Failed to restart server: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Error restarting server: ' + error);
+            });
+        }
+
+        // Check on page load
+        checkRestartNeeded();
     </script>
     {% block extra_js %}{% endblock %}
 </body>

@@ -70,3 +70,59 @@ class BedrockSimpleClient:
         except Exception as e:
             print(f"Port check failed: {e}")
             return False
+
+    def send_command_with_output(self, command):
+        """Send command and return output - limited functionality without SSH"""
+        return self.send_command(command)
+
+    def get_online_players(self):
+        """Get online players - not available without SSH"""
+        return {'success': False, 'players': [], 'error': 'Requires SSH configuration'}
+
+    def get_server_properties(self):
+        """Get server properties - not available without SSH"""
+        return {'success': False, 'properties': {}, 'error': 'Requires SSH configuration'}
+
+    def update_server_properties(self, properties):
+        """Update server properties - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}
+
+    def get_whitelist(self):
+        """Get whitelist - not available without SSH"""
+        return {'success': False, 'whitelist': [], 'error': 'Requires SSH configuration'}
+
+    def get_ops(self):
+        """Get operators - not available without SSH"""
+        return {'success': False, 'ops': [], 'error': 'Requires SSH configuration'}
+
+    def get_container_stats(self):
+        """Get container stats - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}
+
+    def list_backups(self):
+        """List backups - not available without SSH"""
+        return {'success': False, 'backups': [], 'error': 'Requires SSH configuration'}
+
+    def create_backup(self, backup_name=None):
+        """Create backup - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}
+
+    def restore_backup(self, filename):
+        """Restore backup - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}
+
+    def delete_backup(self, filename):
+        """Delete backup - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}
+
+    def create_new_world(self, seed=None, auto_restart=True):
+        """Create new world - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}
+
+    def restart_container(self):
+        """Restart container - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}
+
+    def stop_container(self):
+        """Stop container - not available without SSH"""
+        return {'success': False, 'error': 'Requires SSH configuration'}

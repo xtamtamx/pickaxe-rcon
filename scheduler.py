@@ -52,12 +52,22 @@ class TaskScheduler:
             json.dump(self.tasks, f, indent=2)
 
     def _is_safe_command(self, command):
-        """Basic validation that command starts with a known safe command"""
-        cmd_lower = command.strip().lower()
+        """Validate that command is safe to execute"""
+        cmd = command.strip()
+        cmd_lower = cmd.lower()
+
+        # Check for shell injection attempts
+        dangerous_chars = [';', '|', '`', '$', '>', '<', '\\', '\n', '\r']
+        for char in dangerous_chars:
+            if char in cmd:
+                print(f"[Scheduler] Blocked: command contains dangerous character '{char}'")
+                return False
+
         # Check if command starts with any safe command
         for safe_cmd in SAFE_COMMANDS:
             if cmd_lower.startswith(safe_cmd.lower()):
                 return True
+
         return False
 
     def _execute_task(self, task_id):
@@ -70,6 +80,13 @@ class TaskScheduler:
 
         # Execute the command(s)
         command = task['command']
+
+        # Check for special @backup action
+        if command.strip().lower() == '@backup':
+            self._execute_backup(task)
+            task['last_run'] = datetime.now().isoformat()
+            self.save_tasks()
+            return
 
         # Support multiple commands separated by ' && '
         if ' && ' in command:
@@ -86,6 +103,32 @@ class TaskScheduler:
                 self.bedrock_client.send_command(command)
             else:
                 print(f"[Scheduler] Warning: Skipped potentially unsafe command: {command}")
+
+    def _execute_backup(self, task):
+        """Create an automatic backup"""
+        try:
+            # Generate backup name with timestamp
+            backup_name = f"auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+            print(f"[Scheduler] Creating automatic backup: {backup_name}")
+
+            # Save world first
+            self.bedrock_client.send_command('save-all')
+
+            # Wait a moment for save to complete
+            import time
+            time.sleep(2)
+
+            # Create the backup
+            result = self.bedrock_client.create_backup(backup_name)
+
+            if result.get('success'):
+                print(f"[Scheduler] Backup created successfully: {result.get('message', backup_name)}")
+            else:
+                print(f"[Scheduler] Backup failed: {result.get('error', 'Unknown error')}")
+
+        except Exception as e:
+            print(f"[Scheduler] Error creating backup: {e}")
 
         # Update last run
         task['last_run'] = datetime.now().isoformat()
