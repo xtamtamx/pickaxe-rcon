@@ -14,6 +14,14 @@ from threading import Thread
 import time
 from functools import wraps
 
+# Optional rate limiting
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    LIMITER_AVAILABLE = True
+except ImportError:
+    LIMITER_AVAILABLE = False
+
 load_dotenv()
 
 # Validation helpers
@@ -57,13 +65,29 @@ VALID_GAMERULES = {
 }
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
+
+# Load configuration first so we can use secure secret key
+config = get_config()
+
+# Use auto-generated secret key from config (falls back to env var for backwards compatibility)
+app.config['SECRET_KEY'] = config.get_secret_key() or os.getenv('SECRET_KEY', 'dev-key-change-in-production')
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for development
 app.config['TEMPLATES_AUTO_RELOAD'] = True
-socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Load configuration
-config = get_config()
+# Restrict CORS to same origin in production, allow all in development
+cors_origins = os.getenv('CORS_ORIGINS', '*')  # Set to specific origin in production
+socketio = SocketIO(app, cors_allowed_origins=cors_origins)
+
+# Set up rate limiting if available
+if LIMITER_AVAILABLE:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["200 per minute"],
+        storage_uri="memory://"
+    )
+else:
+    limiter = None
 
 # Login setup
 login_manager = LoginManager()
@@ -227,18 +251,22 @@ def login():
         password = request.form.get('password')
 
         admin_user = config.get('admin.username', 'admin')
-        admin_pass = config.get('admin.password', 'admin')
 
-        print(f"Login attempt for user: {username}")
-
-        if username == admin_user and password == admin_pass:
+        # Use secure password verification
+        if username == admin_user and config.verify_admin_password(password):
             user = User(username)
             login_user(user)
             return redirect(url_for('index'))
         else:
+            # Add small delay to prevent timing attacks
+            time.sleep(0.5)
             return render_template('login.html', error='Invalid credentials')
 
     return render_template('login.html')
+
+# Apply rate limiting to login if available
+if LIMITER_AVAILABLE and limiter:
+    login = limiter.limit("5 per minute")(login)
 
 @app.route('/logout')
 @login_required
@@ -345,6 +373,87 @@ def get_stats():
     """Get server performance statistics"""
     result = bedrock_client.get_container_stats()
     return jsonify(result)
+
+@app.route('/api/version')
+@login_required
+def get_version():
+    """Get server version and check for updates"""
+    import urllib.request
+    import ssl
+    import subprocess
+
+    current_version = None
+    latest_version = None
+
+    # Try to get current version from the BEGINNING of server logs (version appears at startup)
+    # Use head instead of tail to get the first 100 lines where version info is
+    try:
+        docker_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker logs {bedrock_client.container_name} 2>&1 | head -100'
+        result = bedrock_client._ssh_command(docker_cmd)
+        if result and result.returncode == 0:
+            logs = result.stdout
+            # Look for version in startup logs like "Version: 1.21.51.02"
+            version_match = re.search(r'Version[:\s]+(\d+\.\d+\.\d+(?:\.\d+)?)', logs)
+            if version_match:
+                current_version = version_match.group(1)
+            # Also check for "Downloading Bedrock server version X.X.X.X"
+            if not current_version:
+                dl_match = re.search(r'Downloading Bedrock server version (\d+\.\d+\.\d+(?:\.\d+)?)', logs)
+                if dl_match:
+                    current_version = dl_match.group(1)
+    except Exception as e:
+        print(f"Failed to get version from logs: {e}")
+
+    # Try to fetch latest version from Minecraft feedback API
+    try:
+        # Use SSL verification based on config (can be disabled for networks with SSL inspection)
+        ssl_verify = config.get('security.ssl_verify', True)
+        if ssl_verify:
+            ctx = ssl.create_default_context()
+        else:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+        req = urllib.request.Request(
+            'https://feedback.minecraft.net/api/v2/help_center/en-us/articles.json?per_page=20&sort_by=created_at&sort_order=desc',
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as response:
+            import json
+            data = json.loads(response.read().decode('utf-8'))
+            for article in data.get('articles', []):
+                title = article.get('title', '')
+                if 'Bedrock' in title:
+                    version_match = re.search(r'(\d+\.\d+\.\d+)', title)
+                    if version_match:
+                        latest_version = version_match.group(1)
+                        break
+    except Exception as e:
+        print(f"Failed to fetch latest version: {e}")
+
+    # Determine if update is available
+    update_available = False
+    if current_version and latest_version:
+        # Simple version comparison - split into parts and compare
+        try:
+            current_parts = [int(x) for x in current_version.split('.')]
+            latest_parts = [int(x) for x in latest_version.split('.')]
+            # Pad shorter version with zeros
+            while len(current_parts) < len(latest_parts):
+                current_parts.append(0)
+            while len(latest_parts) < len(current_parts):
+                latest_parts.append(0)
+            update_available = latest_parts > current_parts
+        except:
+            pass
+
+    return jsonify({
+        'success': True,
+        'current_version': current_version,
+        'latest_version': latest_version,
+        'update_available': update_available
+    })
 
 @app.route('/api/logs')
 @login_required
@@ -813,8 +922,8 @@ def update_admin_credentials():
         new_password = request.form.get('new_password')
         admin_user = request.form.get('admin_user')
 
-        # Verify current password
-        if current_password != config.get('admin.password'):
+        # Verify current password using secure verification
+        if not config.verify_admin_password(current_password):
             return jsonify({'success': False, 'message': 'Current password is incorrect'}), 401
 
         admin_config = {'username': admin_user}
