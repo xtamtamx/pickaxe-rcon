@@ -24,33 +24,65 @@
 
 ## 🚀 Quick Start
 
-### Using Docker (Recommended)
+### Option 1: Local Server (Same Machine)
+
+For Minecraft servers running on the same machine as the panel:
 
 ```bash
 docker run -d \
   --name pickaxe-rcon \
   -p 5000:5000 \
-  -e ADMIN_USER=admin \
-  -e ADMIN_PASS=YourSecurePassword \
-  -e SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))") \
   -v pickaxe-data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   xtamtamx/pickaxe-rcon:latest
 ```
 
-Then open `http://localhost:5000` and complete the setup wizard!
+### Option 2: Remote Server (NAS/VPS via SSH)
+
+For Minecraft servers on a remote machine (QNAP, Synology, VPS):
+
+```bash
+docker run -d \
+  --name pickaxe-rcon \
+  -p 5000:5000 \
+  -v pickaxe-data:/app/data \
+  -v ~/.ssh/id_rsa:/root/.ssh/minecraft_panel_rsa:ro \
+  xtamtamx/pickaxe-rcon:latest
+```
+
+> **Note:** Mount your SSH private key that has access to the remote server.
+
+### First Run
+
+1. Open `http://localhost:5000`
+2. Complete the **Setup Wizard**:
+   - Enter your Minecraft server's SSH/connection details
+   - Set admin username and password
+3. Start managing your server!
+
+**Security features enabled automatically:**
+- Passwords hashed with bcrypt
+- Secure session key auto-generated
+- Rate limiting on login (5 attempts/min)
 
 ### Using Docker Compose
 
+```yaml
+version: '3.8'
+services:
+  pickaxe-rcon:
+    image: xtamtamx/pickaxe-rcon:latest
+    container_name: pickaxe-rcon
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ~/.ssh/id_rsa:/root/.ssh/minecraft_panel_rsa:ro  # For remote servers
+      # - /var/run/docker.sock:/var/run/docker.sock:ro  # For local servers
+```
+
 ```bash
-# Download example compose file
-curl -O https://raw.githubusercontent.com/xtamtamx/pickaxe-rcon/main/docker-compose.yml.example
-mv docker-compose.yml.example docker-compose.yml
-
-# Edit configuration
-nano docker-compose.yml
-
-# Start
 docker-compose up -d
 ```
 
@@ -153,9 +185,28 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 🔒 Security
 
+Pickaxe RCON includes several security features out of the box:
+
+| Feature | Description |
+|---------|-------------|
+| **bcrypt Password Hashing** | Admin passwords are securely hashed, never stored in plaintext |
+| **Auto-generated Secret Key** | Cryptographically secure session key created on first run |
+| **Rate Limiting** | Login attempts limited to 5 per minute to prevent brute force |
+| **Timing Attack Prevention** | Constant-time password comparison with delay on failures |
+| **Input Validation** | All user inputs validated and sanitized |
+| **Command Injection Prevention** | Shell characters blocked in scheduled commands |
+
+### Security Checklist for Production
+
+- [ ] Use HTTPS (reverse proxy with nginx/Caddy recommended)
+- [ ] Set `CORS_ORIGINS` environment variable to your domain
+- [ ] Use a strong admin password (min 6 characters required)
+- [ ] Keep SSH keys secure with proper permissions (600)
+- [ ] Regularly update to latest version
+
 Please review our **[Security Policy](SECURITY.md)** before deploying to production.
 
-To report a security vulnerability, please email [your-email@example.com] instead of opening a public issue.
+To report a security vulnerability, please email security@example.com instead of opening a public issue.
 
 ## 📜 License
 
