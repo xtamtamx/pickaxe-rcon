@@ -1,6 +1,6 @@
 {
-  "name": "Minecraft Bedrock Panel",
-  "short_name": "MC Panel",
+  "name": "Pickaxe RCON",
+  "short_name": "Pickaxe",
   "description": "Minecraft Bedrock Server Administration Panel",
   "start_url": "/",
   "display": "standalone",
