@@ -132,6 +132,14 @@
                 </div>
 
                 <div>
+                    <h3 style="color: #55ff55; margin-top: 0;">Start Server</h3>
+                    <button class="mc-button mc-button-green" onclick="startServer()" style="width: 100%;">
+                        ▶️ Start
+                    </button>
+                    <small style="color: #aaa; display: block; margin-top: 8px;">Start the server if stopped</small>
+                </div>
+
+                <div>
                     <h3 style="color: #ff5555; margin-top: 0;">Stop Server</h3>
                     <button class="mc-button mc-button-red" onclick="stopServer()" style="width: 100%;">
                         ⏹️ Stop
@@ -140,8 +148,17 @@
                 </div>
             </div>
 
+            <div style="margin-top: 20px;">
+                <h3 style="color: #55aaff;">Update Server</h3>
+                <p style="color: #aaa; margin-bottom: 10px;" id="server-version">Current version: Loading...</p>
+                <button class="mc-button" onclick="updateServer()" style="width: 100%; background: #5555ff;">
+                    ⬆️ Check for Updates & Install
+                </button>
+                <small style="color: #aaa; display: block; margin-top: 8px;">Pull latest Bedrock server version and restart</small>
+            </div>
+
             <div style="margin-top: 20px; padding: 16px; background: #ffcc00; border: 2px solid #ff9900; border-radius: 4px;">
-                <p style="color: #000; margin: 0; font-weight: bold;">⚠️ Warning: Restart and Stop actions will disconnect all players!</p>
+                <p style="color: #000; margin: 0; font-weight: bold;">⚠️ Warning: Restart, Stop, and Update actions will disconnect all players!</p>
             </div>
         </div>
     </div>
@@ -470,9 +487,108 @@ function stopServer() {
     }, 10000);
 }
 
+function startServer() {
+    if (!confirm('Start the Minecraft server?')) {
+        return;
+    }
+
+    showMessage('Starting server...', true);
+
+    fetch('/api/server/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('✓ Server started successfully!', true);
+        } else {
+            showMessage('✗ Failed to start: ' + (data.error || 'Unknown error'), false);
+        }
+    })
+    .catch(error => {
+        showMessage('✗ Error: ' + error, false);
+    });
+}
+
+function updateServer() {
+    if (!confirm('⚠️ UPDATE SERVER?\n\nThis will:\n1. Save the world\n2. Pull the latest Bedrock server version\n3. Restart the server\n\nAll players will be disconnected.\nThis may take 2-5 minutes.\n\nAre you sure?')) {
+        return;
+    }
+
+    // Warn players immediately
+    fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'say Server updating NOW! Disconnection imminent.' })
+    });
+
+    showMessage('Updating server... This may take 2-5 minutes. Please wait.', true);
+
+    // Disable the button to prevent double-clicks
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '⏳ Updating...';
+
+    // Use AbortController for timeout (5 minutes)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+    fetch('/api/server/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearTimeout(timeoutId);
+        btn.disabled = false;
+        btn.textContent = '⬆️ Check for Updates & Install';
+
+        if (data.success) {
+            if (data.updated) {
+                showMessage('✓ Server updated to latest version!', true);
+            } else {
+                showMessage('✓ Server is already up to date', true);
+            }
+            loadServerVersion();
+        } else {
+            showMessage('✗ Update failed: ' + (data.error || 'Unknown error'), false);
+        }
+    })
+    .catch(error => {
+        clearTimeout(timeoutId);
+        btn.disabled = false;
+        btn.textContent = '⬆️ Check for Updates & Install';
+
+        if (error.name === 'AbortError') {
+            showMessage('✗ Update timed out after 5 minutes. Check server status.', false);
+        } else {
+            showMessage('✗ Error: ' + error, false);
+        }
+    });
+}
+
+function loadServerVersion() {
+    fetch('/api/server/version')
+    .then(response => response.json())
+    .then(data => {
+        const versionEl = document.getElementById('server-version');
+        if (data.success && data.version) {
+            versionEl.textContent = 'Current version: ' + data.version;
+        } else {
+            versionEl.textContent = 'Current version: Unknown';
+        }
+    })
+    .catch(() => {
+        document.getElementById('server-version').textContent = 'Current version: Unable to fetch';
+    });
+}
+
 // Load banned players and backup list on page load
 loadBannedPlayers();
 loadBackupList();
+loadServerVersion();
 </script>
 
 <style>

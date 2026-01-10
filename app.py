@@ -129,11 +129,13 @@ def initialize_bedrock_client():
     server_config = config.get_server_config()
     container_name = server_config.get('container_name', 'minecraft-bedrock')
     server_host = server_config.get('server_host', 'localhost')
+    ssh_host = server_config.get('ssh_host', 'localhost')
+    ssh_user = server_config.get('ssh_user', 'admin')
 
     ssh_key_path = os.path.expanduser('~/.ssh/minecraft_panel_rsa')
     if os.path.exists(ssh_key_path):
-        print(f"SSH key found, using remote client for {server_host}")
-        bedrock_client = BedrockRemoteClient(server_host, container_name)
+        print(f"SSH key found, using remote client for {server_host} (SSH to {ssh_user}@{ssh_host})")
+        bedrock_client = BedrockRemoteClient(server_host, container_name, ssh_host=ssh_host, ssh_user=ssh_user)
     else:
         print("No SSH key found, using simple client (limited functionality)")
         bedrock_client = BedrockSimpleClient(server_host, container_name)
@@ -404,9 +406,8 @@ def get_version():
     except Exception as e:
         print(f"Failed to get version from logs: {e}")
 
-    # Try to fetch latest version from Minecraft feedback API
+    # Try to fetch latest version from official Minecraft download page
     try:
-        # Use SSL verification based on config (can be disabled for networks with SSL inspection)
         ssl_verify = config.get('security.ssl_verify', True)
         if ssl_verify:
             ctx = ssl.create_default_context()
@@ -415,22 +416,39 @@ def get_version():
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
+        # Try the official Bedrock server download page
         req = urllib.request.Request(
-            'https://feedback.minecraft.net/api/v2/help_center/en-us/articles.json?per_page=20&sort_by=created_at&sort_order=desc',
-            headers={'User-Agent': 'Mozilla/5.0'}
+            'https://www.minecraft.net/en-us/download/server/bedrock',
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         )
         with urllib.request.urlopen(req, timeout=10, context=ctx) as response:
-            import json
-            data = json.loads(response.read().decode('utf-8'))
-            for article in data.get('articles', []):
-                title = article.get('title', '')
-                if 'Bedrock' in title:
-                    version_match = re.search(r'(\d+\.\d+\.\d+)', title)
-                    if version_match:
-                        latest_version = version_match.group(1)
-                        break
+            html = response.read().decode('utf-8')
+            # Look for version in download links like "bedrock-server-1.21.132.zip"
+            version_match = re.search(r'bedrock-server-(\d+\.\d+\.\d+(?:\.\d+)?)', html)
+            if version_match:
+                latest_version = version_match.group(1)
     except Exception as e:
-        print(f"Failed to fetch latest version: {e}")
+        print(f"Failed to fetch latest version from download page: {e}")
+
+    # Fallback: try Minecraft feedback API
+    if not latest_version:
+        try:
+            req = urllib.request.Request(
+                'https://feedback.minecraft.net/api/v2/help_center/en-us/articles.json?per_page=20&sort_by=created_at&sort_order=desc',
+                headers={'User-Agent': 'Mozilla/5.0'}
+            )
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as response:
+                import json
+                data = json.loads(response.read().decode('utf-8'))
+                for article in data.get('articles', []):
+                    title = article.get('title', '')
+                    if 'Bedrock' in title and 'Preview' not in title:
+                        version_match = re.search(r'(\d+\.\d+\.\d+)', title)
+                        if version_match:
+                            latest_version = version_match.group(1)
+                            break
+        except Exception as e:
+            print(f"Failed to fetch latest version from feedback API: {e}")
 
     # Determine if update is available
     update_available = False
@@ -887,6 +905,40 @@ def stop_server():
 
         # Stop the container
         result = bedrock_client.stop_container()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/server/start', methods=['POST'])
+@login_required
+def start_server():
+    """Start the Minecraft server"""
+    try:
+        result = bedrock_client.start_container()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/server/update', methods=['POST'])
+@login_required
+def update_server():
+    """Update the Minecraft server to latest version"""
+    try:
+        # First save the world
+        execute_bedrock_command('save-all')
+
+        # Update the server (pulls latest image and restarts)
+        result = bedrock_client.update_server()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/server/version', methods=['GET'])
+@login_required
+def get_server_version():
+    """Get the current server version"""
+    try:
+        result = bedrock_client.get_server_version()
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
