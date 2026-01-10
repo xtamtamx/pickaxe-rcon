@@ -8,23 +8,23 @@ DOCKER_PATH = os.getenv('DOCKER_PATH', '/share/CACHEDEV1_DATA/.qpkg/container-st
 
 class BedrockRemoteClient:
     """Client for interacting with Minecraft Bedrock server on remote host via SSH"""
-    
-    def __init__(self, host='localhost', container_name=None):
+
+    def __init__(self, host='localhost', container_name=None, ssh_host=None, ssh_user=None):
         self.game_host = host  # Where the game is accessible
-        self.ssh_host = os.getenv('SSH_HOST', 'localhost')  # Where to SSH to
+        self.ssh_host = ssh_host or os.getenv('SSH_HOST', 'localhost')  # Where to SSH to
         self.container_name = container_name or os.getenv('CONTAINER_NAME', 'minecraft-bedrock-server')
-        self.ssh_user = os.getenv('SSH_USER', 'admin')  # Default QNAP user
-    
-    def _ssh_command(self, command):
+        self.ssh_user = ssh_user or os.getenv('SSH_USER', 'admin')  # Default QNAP user
+
+    def _ssh_command(self, command, timeout=30):
         """Execute command on remote host via SSH"""
         ssh_key = os.path.expanduser('~/.ssh/minecraft_panel_rsa')
         ssh_cmd = [
-            'ssh', 
+            'ssh',
             '-i', ssh_key,
             '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile=/dev/null',
             '-o', 'LogLevel=ERROR',
-            f'{self.ssh_user}@{self.ssh_host}', 
+            f'{self.ssh_user}@{self.ssh_host}',
             command
         ]
         try:
@@ -32,9 +32,12 @@ class BedrockRemoteClient:
                 ssh_cmd,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=timeout
             )
             return result
+        except subprocess.TimeoutExpired:
+            print(f"SSH command timed out after {timeout}s: {command[:50]}...")
+            return None
         except Exception as e:
             print(f"SSH command failed: {e}")
             return None
@@ -586,24 +589,104 @@ class BedrockRemoteClient:
     def restart_container(self):
         """Restart the Minecraft server container"""
         restart_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker restart {self.container_name}'
-        result = self._ssh_command(restart_cmd)
+        result = self._ssh_command(restart_cmd, timeout=120)  # 2 min timeout for restart
 
         if result and result.returncode == 0:
             return {'success': True, 'message': 'Server container restarted successfully'}
         else:
-            error_msg = result.stderr if result else 'Unknown error'
+            error_msg = result.stderr if result else 'Command timed out or SSH failed'
             return {'success': False, 'error': f'Failed to restart container: {error_msg}'}
 
     def stop_container(self):
         """Stop the Minecraft server container"""
         stop_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker stop {self.container_name}'
-        result = self._ssh_command(stop_cmd)
+        result = self._ssh_command(stop_cmd, timeout=60)  # 1 min timeout for stop
 
         if result and result.returncode == 0:
             return {'success': True, 'message': 'Server container stopped successfully'}
         else:
             error_msg = result.stderr if result else 'Unknown error'
             return {'success': False, 'error': f'Failed to stop container: {error_msg}'}
+
+    def start_container(self):
+        """Start the Minecraft server container"""
+        start_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker start {self.container_name}'
+        result = self._ssh_command(start_cmd, timeout=60)
+
+        if result and result.returncode == 0:
+            return {'success': True, 'message': 'Server container started successfully'}
+        else:
+            error_msg = result.stderr if result else 'Unknown error'
+            return {'success': False, 'error': f'Failed to start container: {error_msg}'}
+
+    def update_server(self):
+        """Update the Minecraft Bedrock server by removing cached binary and restarting"""
+        docker_path = '/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker'
+
+        # Step 1: Get the data volume path from container
+        inspect_cmd = f'{docker_path} inspect {self.container_name} --format "{{{{range .Mounts}}}}{{{{if eq .Destination \\"/data\\"}}}}{{{{.Source}}}}{{{{end}}}}{{{{end}}}}"'
+        inspect_result = self._ssh_command(inspect_cmd, timeout=30)
+
+        if not inspect_result or inspect_result.returncode != 0 or not inspect_result.stdout.strip():
+            return {'success': False, 'error': 'Failed to find data volume path', 'step': 'inspect'}
+
+        data_path = inspect_result.stdout.strip()
+
+        # Step 2: Get current version before update
+        version_cmd = f'{docker_path} logs --tail 100 {self.container_name} 2>&1 | grep -o "Version: [0-9.]*" | tail -1'
+        version_result = self._ssh_command(version_cmd, timeout=15)
+        old_version = version_result.stdout.strip() if version_result else 'Unknown'
+
+        # Step 3: Stop the container
+        stop_cmd = f'{docker_path} stop {self.container_name}'
+        stop_result = self._ssh_command(stop_cmd, timeout=60)
+
+        if not stop_result or stop_result.returncode != 0:
+            return {'success': False, 'error': 'Failed to stop container', 'step': 'stop'}
+
+        # Step 4: Remove the cached bedrock_server binary to force re-download
+        rm_cmd = f'rm -f {data_path}/bedrock_server-*'
+        rm_result = self._ssh_command(rm_cmd, timeout=30)
+
+        # Step 5: Pull latest Docker image (in case there are container updates)
+        pull_cmd = f'{docker_path} pull itzg/minecraft-bedrock-server:latest'
+        self._ssh_command(pull_cmd, timeout=300)  # Best effort, continue even if fails
+
+        # Step 6: Start the container (it will download the latest Bedrock server)
+        start_cmd = f'{docker_path} start {self.container_name}'
+        start_result = self._ssh_command(start_cmd, timeout=60)
+
+        if not start_result or start_result.returncode != 0:
+            return {'success': False, 'error': 'Failed to start container after update', 'step': 'start'}
+
+        # Step 7: Wait for server to download and start, then get new version
+        import time
+        time.sleep(45)  # Give it time to download and start
+
+        new_version_cmd = f'{docker_path} logs --tail 100 {self.container_name} 2>&1 | grep -o "Version: [0-9.]*" | tail -1'
+        new_version_result = self._ssh_command(new_version_cmd, timeout=15)
+        new_version = new_version_result.stdout.strip() if new_version_result else 'Unknown'
+
+        if old_version != new_version and new_version != 'Unknown':
+            return {'success': True, 'message': f'Updated from {old_version} to {new_version}', 'updated': True, 'old_version': old_version, 'new_version': new_version}
+        elif new_version != 'Unknown':
+            return {'success': True, 'message': f'Server restarted with {new_version} (was already latest)', 'updated': False, 'version': new_version}
+        else:
+            return {'success': True, 'message': 'Server restarted, check logs for version', 'updated': True}
+
+    def get_server_version(self):
+        """Get the current Minecraft Bedrock server version from logs"""
+        docker_path = '/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker'
+        # Look for version in recent logs
+        logs_cmd = f'{docker_path} logs --tail 50 {self.container_name} 2>&1 | grep -i "Version"'
+        result = self._ssh_command(logs_cmd, timeout=15)
+
+        if result and result.returncode == 0 and result.stdout.strip():
+            # Parse version from log line
+            for line in result.stdout.split('\n'):
+                if 'Version' in line:
+                    return {'success': True, 'version': line.strip()}
+        return {'success': False, 'version': 'Unknown'}
 
 # For local testing without SSH (when running on same host)
 class BedrockLocalClient:
