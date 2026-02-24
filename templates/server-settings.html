@@ -440,11 +440,11 @@ function loadSettings() {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('settings-form').style.display = 'block';
             } else {
-                document.getElementById('loading').innerHTML = '<p style="color: #ff5555;">Failed to load settings: ' + data.error + '</p>';
+                document.getElementById('loading').innerHTML = '<p style="color: #ff5555;">Failed to load settings: ' + escapeHtml(data.error) + '</p>';
             }
         })
         .catch(error => {
-            document.getElementById('loading').innerHTML = '<p style="color: #ff5555;">Error: ' + error + '</p>';
+            document.getElementById('loading').innerHTML = '<p style="color: #ff5555;">Error: ' + escapeHtml(error) + '</p>';
         });
 }
 
@@ -527,13 +527,13 @@ document.getElementById('settings-form').addEventListener('submit', function(e) 
         if (data.success) {
             msgDiv.style.backgroundColor = '#7cbd1e';
             msgDiv.style.color = '#000';
-            msgDiv.innerHTML = '✓ ' + data.message;
+            msgDiv.textContent = '✓ ' + (data.message || 'Settings saved');
             // Trigger the restart alert banner
             setRestartNeeded();
         } else {
             msgDiv.style.backgroundColor = '#ff5555';
             msgDiv.style.color = '#fff';
-            msgDiv.innerHTML = '✗ Failed to save: ' + data.error;
+            msgDiv.textContent = '✗ Failed to save: ' + (data.error || 'Unknown error');
         }
 
         setTimeout(() => {

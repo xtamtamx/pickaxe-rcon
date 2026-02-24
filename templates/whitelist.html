@@ -114,11 +114,17 @@ function displayWhitelist(whitelist) {
 
     whitelist.forEach(player => {
         const tr = document.createElement('tr');
+        // SECURITY: Escape player data to prevent XSS
+        const safeName = escapeHtml(player.name || player.gamertag || 'Unknown');
+        const safeXuid = escapeHtml(player.xuid || 'N/A');
+        // For onclick, escape for JS string context
+        const jsName = (player.name || player.gamertag || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        
         tr.innerHTML = `
-            <td>${player.name || player.gamertag || 'Unknown'}</td>
-            <td style="font-family: monospace; color: #aaa;">${player.xuid || 'N/A'}</td>
+            <td>${safeName}</td>
+            <td style="font-family: monospace; color: #aaa;">${safeXuid}</td>
             <td>
-                <button class="mc-button mc-button-red" onclick="removePlayer('${player.name || player.gamertag}')">
+                <button class="mc-button mc-button-red" onclick="removePlayer('${jsName}')">
                     🗑️ Remove
                 </button>
             </td>
