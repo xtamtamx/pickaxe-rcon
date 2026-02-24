@@ -236,13 +236,14 @@ def setup():
         if admin_config['password'] != password_confirm:
             return render_template('setup.html', error="Passwords do not match")
 
-        # Save configuration
-        if config.complete_setup(server_config, admin_config):
+        # Save configuration (with validation)
+        success, error = config.complete_setup(server_config, admin_config)
+        if success:
             # Reinitialize bedrock client with new config
             initialize_bedrock_client()
             return redirect(url_for('login'))
         else:
-            return render_template('setup.html', error="Failed to save configuration")
+            return render_template('setup.html', error=error or "Failed to save configuration")
 
     return render_template('setup.html')
 
@@ -956,14 +957,16 @@ def update_connection_settings():
             'server_host': request.form.get('server_host')
         }
 
-        if config.update_server_config(server_config):
+        # Validate and save (validation happens in config.update_server_config)
+        success, error = config.update_server_config(server_config)
+        if success:
             # Reinitialize bedrock client with new config
             initialize_bedrock_client()
             return jsonify({'success': True, 'message': 'Connection settings updated successfully'})
         else:
-            return jsonify({'success': False, 'message': 'Failed to save configuration'}), 500
+            return jsonify({'success': False, 'message': error or 'Failed to save configuration'}), 400
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': 'An error occurred while saving configuration'}), 500
 
 @app.route('/api/admin-credentials', methods=['POST'])
 @login_required

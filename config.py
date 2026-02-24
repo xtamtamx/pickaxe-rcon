@@ -5,9 +5,10 @@ Handles server connection settings and setup flow
 
 import json
 import os
+import re
 import secrets
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 try:
     import bcrypt
@@ -15,6 +16,147 @@ try:
 except ImportError:
     BCRYPT_AVAILABLE = False
     print("Warning: bcrypt not installed, passwords will be stored in plaintext")
+
+
+# =============================================================================
+# Security Validators - Prevent command injection via config values
+# =============================================================================
+
+def validate_container_name(name: str) -> Tuple[bool, str]:
+    """
+    Validate Docker container name.
+    Docker allows: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+    We're strict: alphanumeric, underscore, hyphen only, 1-128 chars
+    """
+    if not name or not isinstance(name, str):
+        return False, "Container name is required"
+    
+    name = name.strip()
+    if len(name) < 1 or len(name) > 128:
+        return False, "Container name must be 1-128 characters"
+    
+    if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$', name):
+        return False, "Container name can only contain letters, numbers, underscores, hyphens, and dots"
+    
+    return True, ""
+
+
+def validate_ssh_host(host: str) -> Tuple[bool, str]:
+    """
+    Validate SSH hostname/IP.
+    Allows: hostname, FQDN, IPv4, IPv6
+    Blocks: shell metacharacters, spaces, injection attempts
+    """
+    if not host or not isinstance(host, str):
+        return False, "SSH host is required"
+    
+    host = host.strip()
+    if len(host) > 253:  # Max DNS name length
+        return False, "SSH host too long"
+    
+    # Block dangerous characters that could enable injection
+    dangerous_chars = [';', '|', '`', '$', '>', '<', '\\', '\n', '\r', ' ', '\t', "'", '"', '&', '(', ')', '{', '}', '[', ']']
+    for char in dangerous_chars:
+        if char in host:
+            return False, f"SSH host contains invalid character"
+    
+    # Allow: alphanumeric, dots, hyphens, colons (IPv6), brackets (IPv6)
+    # IPv4: 192.168.1.1
+    # IPv6: ::1, fe80::1, [::1]
+    # Hostname: my-server.local, nas.home
+    if not re.match(r'^[a-zA-Z0-9.\-:\[\]]+$', host):
+        return False, "SSH host contains invalid characters"
+    
+    return True, ""
+
+
+def validate_ssh_user(user: str) -> Tuple[bool, str]:
+    """
+    Validate SSH username.
+    Linux usernames: typically [a-z_][a-z0-9_-]*[$]? but we allow uppercase too
+    Max 32 chars on most systems
+    """
+    if not user or not isinstance(user, str):
+        return False, "SSH user is required"
+    
+    user = user.strip()
+    if len(user) < 1 or len(user) > 32:
+        return False, "SSH user must be 1-32 characters"
+    
+    # Block injection attempts
+    dangerous_chars = [';', '|', '`', '$', '>', '<', '\\', '\n', '\r', ' ', '\t', "'", '"', '&', '@', '(', ')']
+    for char in dangerous_chars:
+        if char in user:
+            return False, f"SSH user contains invalid character"
+    
+    # Standard Unix username pattern (relaxed to allow uppercase)
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_-]*$', user):
+        return False, "SSH user contains invalid characters"
+    
+    return True, ""
+
+
+def validate_server_host(host: str) -> Tuple[bool, str]:
+    """
+    Validate Minecraft server host (IP or hostname).
+    Similar rules to SSH host.
+    """
+    if not host or not isinstance(host, str):
+        return False, "Server host is required"
+    
+    host = host.strip()
+    if len(host) > 253:
+        return False, "Server host too long"
+    
+    # Block dangerous characters
+    dangerous_chars = [';', '|', '`', '$', '>', '<', '\\', '\n', '\r', ' ', '\t', "'", '"', '&', '(', ')', '{', '}']
+    for char in dangerous_chars:
+        if char in host:
+            return False, f"Server host contains invalid character"
+    
+    if not re.match(r'^[a-zA-Z0-9.\-:\[\]]+$', host):
+        return False, "Server host contains invalid characters"
+    
+    return True, ""
+
+
+def validate_server_config(server_config: Dict[str, str]) -> Tuple[bool, str]:
+    """
+    Validate all server configuration fields.
+    Returns (is_valid, error_message)
+    """
+    connection_type = server_config.get('connection_type', 'ssh')
+    
+    # Validate container name (always required)
+    container_name = server_config.get('container_name', '')
+    if container_name:
+        valid, error = validate_container_name(container_name)
+        if not valid:
+            return False, f"Container name: {error}"
+    
+    # Validate server host (always required)
+    server_host = server_config.get('server_host', '')
+    if server_host:
+        valid, error = validate_server_host(server_host)
+        if not valid:
+            return False, f"Server host: {error}"
+    
+    # SSH-specific validation
+    if connection_type == 'ssh':
+        ssh_host = server_config.get('ssh_host', '')
+        if ssh_host:
+            valid, error = validate_ssh_host(ssh_host)
+            if not valid:
+                return False, f"SSH host: {error}"
+        
+        ssh_user = server_config.get('ssh_user', '')
+        if ssh_user:
+            valid, error = validate_ssh_user(ssh_user)
+            if not valid:
+                return False, f"SSH user: {error}"
+    
+    return True, ""
+
 
 class Config:
     """Manages application configuration with persistence"""
@@ -171,8 +313,16 @@ class Config:
         """Check if initial setup has been completed"""
         return self.config.get('setup_completed', False)
 
-    def complete_setup(self, server_config: Dict[str, str], admin_config: Dict[str, str]) -> bool:
-        """Complete initial setup with server and admin configuration"""
+    def complete_setup(self, server_config: Dict[str, str], admin_config: Dict[str, str]) -> Tuple[bool, str]:
+        """
+        Complete initial setup with server and admin configuration.
+        Returns (success, error_message)
+        """
+        # Validate server config before saving
+        valid, error = validate_server_config(server_config)
+        if not valid:
+            return False, error
+        
         self.config['setup_completed'] = True
         self.config['server'].update(server_config)
 
@@ -183,12 +333,24 @@ class Config:
         else:
             self.config['admin'].update(admin_config)
 
-        return self.save()
+        if self.save():
+            return True, ""
+        return False, "Failed to save configuration"
 
-    def update_server_config(self, server_config: Dict[str, str]) -> bool:
-        """Update server connection settings"""
+    def update_server_config(self, server_config: Dict[str, str]) -> Tuple[bool, str]:
+        """
+        Update server connection settings.
+        Returns (success, error_message)
+        """
+        # Validate server config before saving
+        valid, error = validate_server_config(server_config)
+        if not valid:
+            return False, error
+        
         self.config['server'].update(server_config)
-        return self.save()
+        if self.save():
+            return True, ""
+        return False, "Failed to save configuration"
 
     def update_admin_config(self, admin_config: Dict[str, str]) -> bool:
         """Update admin credentials"""
