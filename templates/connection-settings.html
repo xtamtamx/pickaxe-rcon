@@ -22,6 +22,7 @@
         </p>
 
         <form method="POST" action="/api/connection-settings">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <h3 style="color: #7cbd1e;">Connection Details</h3>
 
             <div class="mc-form-group">
@@ -90,6 +91,7 @@
         </p>
 
         <form method="POST" action="/api/map-settings">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mc-form-group">
                 <label>
                     <input type="checkbox" id="map_enabled" name="map_enabled" {% if config.map.enabled %}checked{% endif %}>
@@ -128,6 +130,7 @@
     </div>
     <div class="mc-panel-body">
         <form method="POST" action="/api/admin-credentials">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mc-form-group">
                 <label for="admin_user">Admin Username:</label>
                 <input type="text" id="admin_user" name="admin_user" class="mc-input"

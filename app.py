@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from flask_socketio import SocketIO, emit
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from bedrock_simple import BedrockSimpleClient
 from bedrock_remote import BedrockRemoteClient
 from scheduler import TaskScheduler
@@ -74,9 +75,39 @@ app.config['SECRET_KEY'] = config.get_secret_key() or os.getenv('SECRET_KEY', 'd
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for development
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
-# Restrict CORS to same origin in production, allow all in development
-cors_origins = os.getenv('CORS_ORIGINS', '*')  # Set to specific origin in production
-socketio = SocketIO(app, cors_allowed_origins=cors_origins)
+# =============================================================================
+# Session Cookie Security
+# =============================================================================
+app.config['SESSION_COOKIE_HTTPONLY'] = True      # Prevent JavaScript access to session cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'     # CSRF mitigation - cookies sent with same-site requests
+# Note: SESSION_COOKIE_SECURE should be True in production with HTTPS
+# Set via environment variable to allow HTTP in development
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+
+# =============================================================================
+# CORS Configuration
+# =============================================================================
+# Default to same-origin only (None). Set CORS_ORIGINS env var to allow specific origins.
+# Use '*' only for development if needed.
+cors_origins = os.getenv('CORS_ORIGINS', None) or None  # None = same origin only
+if cors_origins == '*':
+    print("⚠️  WARNING: CORS_ORIGINS='*' allows any origin. Set to specific domain in production.")
+socketio = SocketIO(app, cors_allowed_origins=cors_origins if cors_origins else [])
+
+# =============================================================================
+# CSRF Protection
+# =============================================================================
+csrf = CSRFProtect(app)
+
+# Exempt WebSocket endpoints from CSRF (they use a different auth mechanism)
+# The login endpoint needs CSRF for form submission
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Return JSON error for AJAX requests, otherwise show error page"""
+    if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': False, 'error': 'CSRF token missing or invalid'}), 400
+    return render_template('login.html', error='Session expired. Please refresh and try again.'), 400
 
 # Set up rate limiting if available
 if LIMITER_AVAILABLE:

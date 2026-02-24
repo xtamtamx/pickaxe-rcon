@@ -7,6 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#7cbd1e">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Pickaxe{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/minecraft.css?v=1007">
     <link rel="manifest" href="/static/manifest.json">
@@ -91,6 +92,36 @@
             });
             element.innerHTML = safeHtml;
         }
+
+        // =============================================================
+        // CSRF Protection for AJAX requests
+        // =============================================================
+        function getCSRFToken() {
+            return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        }
+
+        // Wrapper for fetch that automatically includes CSRF token
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            // Only add CSRF token for same-origin requests with methods that modify data
+            const method = (options.method || 'GET').toUpperCase();
+            const modifyingMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
+            
+            if (modifyingMethods.includes(method)) {
+                options.headers = options.headers || {};
+                // Handle both Headers object and plain object
+                if (options.headers instanceof Headers) {
+                    if (!options.headers.has('X-CSRFToken')) {
+                        options.headers.set('X-CSRFToken', getCSRFToken());
+                    }
+                } else {
+                    if (!options.headers['X-CSRFToken']) {
+                        options.headers['X-CSRFToken'] = getCSRFToken();
+                    }
+                }
+            }
+            return originalFetch.call(this, url, options);
+        };
 
         // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
