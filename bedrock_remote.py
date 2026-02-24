@@ -6,14 +6,73 @@ import re
 # QNAP-specific Docker path (can be overridden via environment variable)
 DOCKER_PATH = os.getenv('DOCKER_PATH', '/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker')
 
+
+def _validate_safe_identifier(value: str, field_name: str, max_length: int = 128) -> str:
+    """
+    Validate that a value is safe to use in shell commands.
+    Defense-in-depth: blocks injection even if config validation is bypassed.
+    Raises ValueError if invalid.
+    """
+    if not value or not isinstance(value, str):
+        raise ValueError(f"{field_name} is required")
+    
+    value = value.strip()
+    if len(value) > max_length:
+        raise ValueError(f"{field_name} too long")
+    
+    # Block all shell metacharacters
+    dangerous_chars = [';', '|', '`', '$', '>', '<', '\\', '\n', '\r', ' ', '\t', "'", '"', '&', '(', ')', '{', '}', '[', ']']
+    for char in dangerous_chars:
+        if char in value:
+            raise ValueError(f"{field_name} contains invalid character")
+    
+    return value
+
+
+def _validate_container_name(name: str) -> str:
+    """Validate Docker container name. Raises ValueError if invalid."""
+    name = _validate_safe_identifier(name, "Container name", 128)
+    if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$', name):
+        raise ValueError("Container name contains invalid characters")
+    return name
+
+
+def _validate_ssh_host(host: str) -> str:
+    """Validate SSH host. Raises ValueError if invalid."""
+    host = _validate_safe_identifier(host, "SSH host", 253)
+    # Allow alphanumeric, dots, hyphens, colons (IPv6)
+    if not re.match(r'^[a-zA-Z0-9.\-:]+$', host):
+        raise ValueError("SSH host contains invalid characters")
+    return host
+
+
+def _validate_ssh_user(user: str) -> str:
+    """Validate SSH username. Raises ValueError if invalid."""
+    user = _validate_safe_identifier(user, "SSH user", 32)
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_-]*$', user):
+        raise ValueError("SSH user contains invalid characters")
+    return user
+
+
 class BedrockRemoteClient:
     """Client for interacting with Minecraft Bedrock server on remote host via SSH"""
 
     def __init__(self, host='localhost', container_name=None, ssh_host=None, ssh_user=None):
         self.game_host = host  # Where the game is accessible
-        self.ssh_host = ssh_host or os.getenv('SSH_HOST', 'localhost')  # Where to SSH to
-        self.container_name = container_name or os.getenv('CONTAINER_NAME', 'minecraft-bedrock-server')
-        self.ssh_user = ssh_user or os.getenv('SSH_USER', 'admin')  # Default QNAP user
+        
+        # Validate all parameters that will be used in shell commands (defense-in-depth)
+        raw_ssh_host = ssh_host or os.getenv('SSH_HOST', 'localhost')
+        raw_container = container_name or os.getenv('CONTAINER_NAME', 'minecraft-bedrock-server')
+        raw_ssh_user = ssh_user or os.getenv('SSH_USER', 'admin')
+        
+        try:
+            self.ssh_host = _validate_ssh_host(raw_ssh_host)
+            self.container_name = _validate_container_name(raw_container)
+            self.ssh_user = _validate_ssh_user(raw_ssh_user)
+        except ValueError as e:
+            # Log the error but use safe defaults to prevent crash
+            print(f"[SECURITY] Invalid configuration rejected: {e}")
+            raise ValueError(f"Security validation failed: {e}")
 
     def _ssh_command(self, command, timeout=30):
         """Execute command on remote host via SSH"""
