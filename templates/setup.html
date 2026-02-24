@@ -18,6 +18,7 @@
             <p>Configure how the admin panel connects to your Minecraft Bedrock server.</p>
 
             <form method="POST" action="/setup">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mc-form-group">
                     <label for="connection_type">Connection Type:</label>
                     <select id="connection_type" name="connection_type" class="mc-input" required>
