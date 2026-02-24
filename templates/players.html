@@ -278,8 +278,9 @@ function loadOnlinePlayers() {
             const container = document.getElementById('online-players');
 
             if (data.success && data.players.length > 0) {
+                // SECURITY: Escape player names to prevent XSS
                 container.innerHTML = '<ul style="list-style: none; padding: 0; margin: 0;">' +
-                    data.players.map(p => `<li style="padding: 8px; border-bottom: 1px solid #555;">👤 ${p}</li>`).join('') +
+                    data.players.map(p => `<li style="padding: 8px; border-bottom: 1px solid #555;">👤 ${escapeHtml(p)}</li>`).join('') +
                     '</ul>';
             } else {
                 container.innerHTML = '<p style="text-align: center; color: #aaa;">No players online</p>';
@@ -297,8 +298,9 @@ function loadOps() {
             const container = document.getElementById('ops-list');
 
             if (data.success && data.ops && data.ops.length > 0) {
+                // SECURITY: Escape operator names to prevent XSS
                 container.innerHTML = '<ul style="list-style: none; padding: 0; margin: 0;">' +
-                    data.ops.map(op => `<li style="padding: 8px; border-bottom: 1px solid #555;">👑 ${op.name || op.gamertag || op.xuid || 'Unknown'}</li>`).join('') +
+                    data.ops.map(op => `<li style="padding: 8px; border-bottom: 1px solid #555;">👑 ${escapeHtml(op.name || op.gamertag || op.xuid || 'Unknown')}</li>`).join('') +
                     '</ul>';
             } else {
                 container.innerHTML = '<p style="text-align: center; color: #aaa;">No operators</p>';

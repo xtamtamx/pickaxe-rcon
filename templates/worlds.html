@@ -208,10 +208,11 @@ function refreshMap() {
                 let html = '<div style="display: grid; gap: 8px;">';
 
                 data.players.forEach(player => {
+                    // SECURITY: Escape player names to prevent XSS
                     html += `
                         <div style="padding: 12px; background: #2a2a2a; border-radius: 4px; border-left: 3px solid #7cbd1e; display: flex; align-items: center;">
                             <span style="font-size: 20px; margin-right: 12px;">👤</span>
-                            <span style="color: #fff; font-size: 18px;">${player}</span>
+                            <span style="color: #fff; font-size: 18px;">${escapeHtml(player)}</span>
                         </div>
                     `;
                 });
@@ -335,15 +336,22 @@ function displayBackups(backups) {
 
     backups.forEach(backup => {
         const tr = document.createElement('tr');
+        // SECURITY: Escape backup data and use safe onclick handling
+        const safeFilename = escapeHtml(backup.filename);
+        const safeSize = escapeHtml(backup.size);
+        const safeDate = escapeHtml(backup.date);
+        // For onclick, we need to escape for JS string context too
+        const jsFilename = backup.filename.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        
         tr.innerHTML = `
-            <td>${backup.filename}</td>
-            <td>${backup.size} bytes</td>
-            <td>${backup.date}</td>
+            <td>${safeFilename}</td>
+            <td>${safeSize} bytes</td>
+            <td>${safeDate}</td>
             <td>
-                <button class="mc-button mc-button-blue" onclick="restoreBackup('${backup.filename}')" style="margin-right: 8px;">
+                <button class="mc-button mc-button-blue" onclick="restoreBackup('${jsFilename}')" style="margin-right: 8px;">
                     ♻️ Restore
                 </button>
-                <button class="mc-button mc-button-red" onclick="deleteBackup('${backup.filename}')">
+                <button class="mc-button mc-button-red" onclick="deleteBackup('${jsFilename}')">
                     🗑️ Delete
                 </button>
             </td>

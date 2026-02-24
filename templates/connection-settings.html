@@ -207,13 +207,13 @@ function testConnection() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                result.innerHTML = '<div class="mc-alert-success">✓ ' + data.message + '</div>';
+                result.innerHTML = '<div class="mc-alert-success">✓ ' + escapeHtml(data.message) + '</div>';
             } else {
-                result.innerHTML = '<div class="mc-alert-error">✗ ' + data.message + '</div>';
+                result.innerHTML = '<div class="mc-alert-error">✗ ' + escapeHtml(data.message) + '</div>';
             }
         })
         .catch(error => {
-            result.innerHTML = '<div class="mc-alert-error">Error testing connection: ' + error + '</div>';
+            result.innerHTML = '<div class="mc-alert-error">Error testing connection: ' + escapeHtml(error) + '</div>';
         });
 }
 

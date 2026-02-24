@@ -265,11 +265,11 @@ function checkVersion() {
             }
 
             if (data.update_available && data.latest_version) {
-                versionStatusEl.innerHTML = `<span style="color: #ffaa00;">⚠️ Update available: ${data.latest_version}</span>`;
+                versionStatusEl.innerHTML = `<span style="color: #ffaa00;">⚠️ Update available: ${escapeHtml(data.latest_version)}</span>`;
             } else if (data.latest_version && data.current_version) {
                 versionStatusEl.innerHTML = `<span style="color: #7cbd1e;">✓ Up to date</span>`;
             } else if (data.latest_version) {
-                versionStatusEl.innerHTML = `<span style="color: #aaa;">Latest: ${data.latest_version}</span>`;
+                versionStatusEl.innerHTML = `<span style="color: #aaa;">Latest: ${escapeHtml(data.latest_version)}</span>`;
             } else {
                 versionStatusEl.innerHTML = `<span style="color: #aaa;">Could not check for updates</span>`;
             }

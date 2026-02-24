@@ -104,9 +104,12 @@ function loadLogs() {
                 const logViewer = document.getElementById('log-viewer');
                 const logLines = data.logs.split('\n');
 
-                // Color code log lines
+                // Color code log lines (escape content first to prevent XSS)
                 const coloredLogs = logLines.map(line => {
                     if (!line.trim()) return '';
+
+                    // SECURITY: Escape HTML entities first
+                    let safeLine = escapeHtml(line);
 
                     let color = '#ddd';
                     if (line.includes('[ERROR]')) {
@@ -117,13 +120,14 @@ function loadLogs() {
                         color = '#7cbd1e';
                     }
 
-                    // Highlight search term
-                    if (search && line.toLowerCase().includes(search.toLowerCase())) {
-                        const regex = new RegExp(`(${search})`, 'gi');
-                        line = line.replace(regex, '<mark style="background: #ffaa00; color: #000;">$1</mark>');
+                    // Highlight search term (on already-escaped content)
+                    if (search) {
+                        const safeSearch = escapeHtml(search);
+                        const regex = new RegExp(`(${safeSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                        safeLine = safeLine.replace(regex, '<mark style="background: #ffaa00; color: #000;">$1</mark>');
                     }
 
-                    return `<div style="color: ${color}; border-bottom: 1px solid #333; padding: 4px 0;">${line}</div>`;
+                    return `<div style="color: ${color}; border-bottom: 1px solid #333; padding: 4px 0;">${safeLine}</div>`;
                 }).join('');
 
                 logViewer.innerHTML = coloredLogs || '<span style="color: #aaa;">No logs found</span>';
@@ -138,7 +142,7 @@ function loadLogs() {
             }
         })
         .catch(error => {
-            document.getElementById('log-viewer').innerHTML = `<span style="color: #ff5555;">Error: ${error}</span>`;
+            document.getElementById('log-viewer').innerHTML = '<span style="color: #ff5555;">Error: ' + escapeHtml(error) + '</span>';
         });
 }
 

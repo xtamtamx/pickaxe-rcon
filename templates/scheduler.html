@@ -209,30 +209,40 @@ function loadTasks() {
                 for (const [taskId, task] of Object.entries(tasks)) {
                     const enabled = task.enabled ? 'Enabled' : 'Disabled';
                     const enabledColor = task.enabled ? '#7cbd1e' : '#aaa';
+                    
+                    // SECURITY: Escape all user-controlled data
+                    const safeName = escapeHtml(task.name);
+                    const safeCommand = escapeHtml(task.command);
+                    const safeCron = escapeHtml(task.cron || '');
+                    const safeTaskId = escapeHtml(taskId);
+                    
                     const scheduleInfo = task.schedule_type === 'interval'
-                        ? `Every ${task.interval_minutes} minutes`
-                        : `Cron: ${task.cron}`;
+                        ? `Every ${escapeHtml(String(task.interval_minutes))} minutes`
+                        : `Cron: ${safeCron}`;
 
                     const lastRun = task.last_run
                         ? new Date(task.last_run).toLocaleString()
                         : 'Never';
 
+                    // For onclick, escape for JS string context
+                    const jsTaskId = taskId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
                     html += `
                         <div class="mc-panel" style="padding: 12px; background: #2a2a2a;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div style="flex: 1;">
-                                    <div style="font-size: 18px; color: #7cbd1e; font-weight: bold;">${task.name}</div>
-                                    <div style="color: #ddd; margin-top: 4px;">Command: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 3px;">${task.command}</code></div>
+                                    <div style="font-size: 18px; color: #7cbd1e; font-weight: bold;">${safeName}</div>
+                                    <div style="color: #ddd; margin-top: 4px;">Command: <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 3px;">${safeCommand}</code></div>
                                     <div style="color: #aaa; font-size: 13px; margin-top: 4px;">
-                                        ${scheduleInfo} • Last run: ${lastRun}
+                                        ${scheduleInfo} • Last run: ${escapeHtml(lastRun)}
                                     </div>
                                 </div>
                                 <div style="display: flex; gap: 8px; align-items: center;">
                                     <span style="color: ${enabledColor}; font-weight: bold;">${enabled}</span>
-                                    <button class="mc-button mc-button-blue" onclick="toggleTask('${taskId}', ${!task.enabled})" style="padding: 6px 12px;">
+                                    <button class="mc-button mc-button-blue" onclick="toggleTask('${jsTaskId}', ${!task.enabled})" style="padding: 6px 12px;">
                                         ${task.enabled ? '⏸️' : '▶️'}
                                     </button>
-                                    <button class="mc-button mc-button-red" onclick="deleteTask('${taskId}')" style="padding: 6px 12px;">
+                                    <button class="mc-button mc-button-red" onclick="deleteTask('${jsTaskId}')" style="padding: 6px 12px;">
                                         🗑️
                                     </button>
                                 </div>
