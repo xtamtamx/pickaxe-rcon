@@ -244,9 +244,15 @@ class Config:
         password_hash = self.config.get('admin', {}).get('password_hash', '')
         return self._verify_password(password, password_hash)
 
-    def get_secret_key(self) -> str:
-        """Get the secret key for Flask sessions"""
-        return self.config.get('security', {}).get('secret_key', 'fallback-key-change-me')
+    def get_secret_key(self):
+        """Return the persisted Flask secret key, or None if not set.
+
+        Returning None (not a placeholder string) is important so that the
+        caller's `config.get_secret_key() or os.getenv(...)` chain falls
+        through correctly when the config-stored key is missing.
+        """
+        key = self.config.get('security', {}).get('secret_key', '')
+        return key or None
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from file or create default"""

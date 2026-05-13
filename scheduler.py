@@ -1,27 +1,46 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.executors.pool import ThreadPoolExecutor
 from datetime import datetime
 import json
 import os
+import re
 
-# Common safe Minecraft commands for scheduled tasks
-SAFE_COMMANDS = [
+# Allowlist of bedrock console commands that may appear as the first token of a
+# scheduled task. The check below is a whole-word match (not startswith), so
+# `op` does not also accept `option`, and `tag` does not also accept `tagged`.
+SAFE_COMMANDS = frozenset({
     'save-all', 'whitelist', 'op', 'deop', 'kick', 'ban', 'pardon',
     'give', 'tp', 'teleport', 'gamemode', 'gamerule', 'time',
     'weather', 'say', 'tell', 'tellraw', 'tag', 'effect', 'title',
     'kill', 'clear', 'difficulty', 'setworldspawn', 'spawnpoint',
-    'xp', 'experience', 'enchant', 'scoreboard', 'team'
-]
+    'xp', 'experience', 'enchant', 'scoreboard', 'team',
+})
+
+# Bedrock selectors use `[`, `]`, `!`, `=`, `,`, `@`, and tellraw uses `{}"`.
+# The shell layer is already protected by shlex.quote in BedrockRemoteClient
+# (bedrock_remote.py:109), so the scheduler only needs to reject newlines
+# (which would corrupt the FIFO write) and enforce the command allowlist.
+_FIRST_TOKEN = re.compile(r'^(\S+)')
 
 class TaskScheduler:
     def __init__(self, bedrock_client):
-        self.scheduler = BackgroundScheduler()
+        # Single worker so the bedrock send-command FIFO is hit serially.
+        # The bedrock client also holds its own SSH lock for cross-process
+        # serialization with request handlers, but limiting the executor
+        # avoids piling up jobs behind the lock.
+        self.scheduler = BackgroundScheduler(
+            executors={'default': ThreadPoolExecutor(1)}
+        )
         self.bedrock_client = bedrock_client
-        # Create data directory if it doesn't exist
         os.makedirs('data', exist_ok=True)
         self.tasks_file = 'data/scheduled_tasks.json'
         self.tasks = self.load_tasks()
+
+    def set_bedrock_client(self, bedrock_client):
+        """Swap the bedrock client (e.g. after connection settings change)."""
+        self.bedrock_client = bedrock_client
 
     def start(self):
         """Start the scheduler"""
@@ -52,23 +71,14 @@ class TaskScheduler:
             json.dump(self.tasks, f, indent=2)
 
     def _is_safe_command(self, command):
-        """Validate that command is safe to execute"""
+        """Whole-word allowlist check on the first token; reject newlines."""
         cmd = command.strip()
-        cmd_lower = cmd.lower()
-
-        # Check for shell injection attempts
-        dangerous_chars = [';', '|', '`', '$', '>', '<', '\\', '\n', '\r']
-        for char in dangerous_chars:
-            if char in cmd:
-                print(f"[Scheduler] Blocked: command contains dangerous character '{char}'")
-                return False
-
-        # Check if command starts with any safe command
-        for safe_cmd in SAFE_COMMANDS:
-            if cmd_lower.startswith(safe_cmd.lower()):
-                return True
-
-        return False
+        if not cmd or '\n' in cmd or '\r' in cmd:
+            return False
+        m = _FIRST_TOKEN.match(cmd)
+        if not m:
+            return False
+        return m.group(1).lower() in SAFE_COMMANDS
 
     def _execute_task(self, task_id):
         """Execute a scheduled task"""

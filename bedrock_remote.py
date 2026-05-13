@@ -2,6 +2,7 @@ import subprocess
 import os
 import shlex
 import re
+import threading
 
 # QNAP-specific Docker path (can be overridden via environment variable)
 DOCKER_PATH = os.getenv('DOCKER_PATH', '/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker')
@@ -70,12 +71,16 @@ class BedrockRemoteClient:
             self.container_name = _validate_container_name(raw_container)
             self.ssh_user = _validate_ssh_user(raw_ssh_user)
         except ValueError as e:
-            # Log the error but use safe defaults to prevent crash
             print(f"[SECURITY] Invalid configuration rejected: {e}")
             raise ValueError(f"Security validation failed: {e}")
 
+        # The bedrock server's `send-command` writes into a single FIFO at
+        # /tmp/console_input. Concurrent writers from APScheduler workers and
+        # request handlers interleave bytes and corrupt commands. Serialize.
+        self._ssh_lock = threading.Lock()
+
     def _ssh_command(self, command, timeout=30):
-        """Execute command on remote host via SSH"""
+        """Execute command on remote host via SSH (serialized)."""
         ssh_key = os.path.expanduser('~/.ssh/minecraft_panel_rsa')
         ssh_cmd = [
             'ssh',
@@ -87,12 +92,13 @@ class BedrockRemoteClient:
             command
         ]
         try:
-            result = subprocess.run(
-                ssh_cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
+            with self._ssh_lock:
+                result = subprocess.run(
+                    ssh_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
             return result
         except subprocess.TimeoutExpired:
             print(f"SSH command timed out after {timeout}s: {command[:50]}...")
@@ -523,23 +529,33 @@ class BedrockRemoteClient:
         if not backup_name:
             backup_name = f"world_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz"
         else:
-            # Ensure custom backup names have .tar.gz extension
             if not backup_name.endswith('.tar.gz'):
                 backup_name = f"{backup_name}.tar.gz"
+            # User-provided name must be a plain filename (no traversal, no shell
+            # specials). Match the validation used by restore/delete.
+            if not re.match(r'^[\w\-\.]+\.tar\.gz$', backup_name) or '..' in backup_name or '/' in backup_name:
+                return {'success': False, 'error': 'Invalid backup name'}
 
-        # Get world name from server.properties
         props_result = self.get_server_properties()
         if not props_result['success']:
             return {'success': False, 'error': 'Failed to read world name'}
 
         world_name = props_result['properties'].get('level-name', 'Bedrock level')
 
-        # Create backups directory if it doesn't exist
+        # Build the inner shell command with shlex.quote so a malicious
+        # `level-name` (admin-editable via /api/server-properties) can't break
+        # out of the quoted argument and inject host commands.
+        inner = (
+            f'cd /data/worlds && tar -czf '
+            f'/data/backups/{shlex.quote(backup_name)} {shlex.quote(world_name)}'
+        )
         mkdir_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -i {self.container_name} mkdir -p /data/backups'
         self._ssh_command(mkdir_cmd)
 
-        # Create backup (tar the world folder)
-        backup_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -i {self.container_name} sh -c "cd /data/worlds && tar -czf /data/backups/{backup_name} \\"{world_name}\\""'
+        backup_cmd = (
+            f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker '
+            f'exec -i {self.container_name} sh -c {shlex.quote(inner)}'
+        )
         result = self._ssh_command(backup_cmd)
 
         if result and result.returncode == 0:
@@ -549,30 +565,46 @@ class BedrockRemoteClient:
             return {'success': False, 'error': f'Failed to create backup: {error_msg}'}
 
     def restore_backup(self, backup_filename):
-        """Restore a world from backup"""
-        # Validate filename to prevent path traversal
+        """Restore a world from backup.
+
+        Two-phase to avoid losing the live world on a corrupt archive:
+          1. Extract into a sibling staging dir under /data/worlds.
+          2. Atomic swap: rm old, mv staged → real.
+        """
         if not re.match(r'^[\w\-\.]+\.tar\.gz$', backup_filename):
             return {'success': False, 'error': 'Invalid backup filename'}
         if '..' in backup_filename or '/' in backup_filename:
             return {'success': False, 'error': 'Invalid backup filename'}
 
-        # Get world name from server.properties
         props_result = self.get_server_properties()
         if not props_result['success']:
             return {'success': False, 'error': 'Failed to read world name'}
 
         world_name = props_result['properties'].get('level-name', 'Bedrock level')
 
-        # Remove current world
-        remove_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -i {self.container_name} sh -c "rm -rf /data/worlds/\\"{world_name}\\""'
-        remove_result = self._ssh_command(remove_cmd)
-
-        if not remove_result or remove_result.returncode != 0:
-            return {'success': False, 'error': 'Failed to remove current world'}
-
-        # Extract backup
-        restore_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -i {self.container_name} sh -c "cd /data/worlds && tar -xzf /data/backups/{backup_filename}"'
-        result = self._ssh_command(restore_cmd)
+        # The script below: clean a stale staging dir, extract there, verify
+        # `level.dat` exists, then atomic-swap. If any step fails the live
+        # world is untouched. World/file names are quoted with shlex so a
+        # space-containing default name like "Bedrock level" survives intact.
+        qw = shlex.quote(world_name)
+        qb = shlex.quote(backup_filename)
+        inner = (
+            'set -e; '
+            'STAGE=/data/worlds/.restore_staging; '
+            'rm -rf "$STAGE"; mkdir -p "$STAGE"; '
+            f'tar -xzf /data/backups/{qb} -C "$STAGE"; '
+            f'EXTRACTED="$STAGE"/{qw}; '
+            '[ -d "$EXTRACTED" ] || EXTRACTED="$(find "$STAGE" -mindepth 1 -maxdepth 1 -type d | head -1)"; '
+            '[ -f "$EXTRACTED/level.dat" ] || { echo "no level.dat in archive" >&2; rm -rf "$STAGE"; exit 2; }; '
+            f'rm -rf /data/worlds/{qw}; '
+            f'mv "$EXTRACTED" /data/worlds/{qw}; '
+            'rm -rf "$STAGE"'
+        )
+        restore_cmd = (
+            f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker '
+            f'exec -i {self.container_name} sh -c {shlex.quote(inner)}'
+        )
+        result = self._ssh_command(restore_cmd, timeout=120)
 
         if result and result.returncode == 0:
             return {'success': True, 'message': f'World restored from {backup_filename}. Restart server to load.'}
@@ -582,13 +614,15 @@ class BedrockRemoteClient:
 
     def delete_backup(self, backup_filename):
         """Delete a backup file"""
-        # Validate filename to prevent path traversal
         if not re.match(r'^[\w\-\.]+\.tar\.gz$', backup_filename):
             return {'success': False, 'error': 'Invalid backup filename'}
         if '..' in backup_filename or '/' in backup_filename:
             return {'success': False, 'error': 'Invalid backup filename'}
 
-        delete_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -i {self.container_name} rm /data/backups/{backup_filename}'
+        delete_cmd = (
+            f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker '
+            f'exec -i {self.container_name} rm /data/backups/{shlex.quote(backup_filename)}'
+        )
         result = self._ssh_command(delete_cmd)
 
         if result and result.returncode == 0:
@@ -618,7 +652,11 @@ class BedrockRemoteClient:
 
         # Remove current world
         print(f"[create_new_world] Deleting world: {world_name}", flush=True)
-        remove_cmd = f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker exec -i {self.container_name} sh -c "rm -rf /data/worlds/\\"{world_name}\\""'
+        inner = f'rm -rf /data/worlds/{shlex.quote(world_name)}'
+        remove_cmd = (
+            f'/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker '
+            f'exec -i {self.container_name} sh -c {shlex.quote(inner)}'
+        )
         result = self._ssh_command(remove_cmd)
 
         if result and result.returncode == 0:
@@ -746,213 +784,3 @@ class BedrockRemoteClient:
                 if 'Version' in line:
                     return {'success': True, 'version': line.strip()}
         return {'success': False, 'version': 'Unknown'}
-
-# For local testing without SSH (when running on same host)
-class BedrockLocalClient:
-    """Fallback client for local Docker access"""
-    
-    def __init__(self, container_name=None):
-        self.container_name = container_name or os.getenv('CONTAINER_NAME', 'minecraft-bedrock-server')
-    
-    def send_command(self, command):
-        """Send a command to the Minecraft server console"""
-        try:
-            docker_cmd = [
-                'docker', 'exec', '-i', self.container_name,
-                'mc-send-to-console', command
-            ]
-            result = subprocess.run(
-                docker_cmd,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            return {
-                'success': result.returncode == 0,
-                'response': result.stdout.strip() if result.stdout else result.stderr.strip()
-            }
-        except Exception as e:
-            return {
-                'success': False,
-                'response': f'Error: {str(e)}'
-            }
-    
-    def get_logs(self, lines=50):
-        """Get recent server logs"""
-        try:
-            result = subprocess.run(
-                ['docker', 'logs', '--tail', str(lines), self.container_name],
-                capture_output=True,
-                text=True
-            )
-            return {
-                'success': result.returncode == 0,
-                'logs': result.stdout
-            }
-        except Exception as e:
-            return {'success': False, 'logs': str(e)}
-    
-    def is_running(self):
-        """Check if the container is running"""
-        try:
-            result = subprocess.run(
-                ['docker', 'ps', '--filter', f'name={self.container_name}', '--format', '{{.Status}}'],
-                capture_output=True,
-                text=True
-            )
-            return 'Up' in result.stdout
-        except:
-            return False
-
-    def get_server_properties(self):
-        """Read server.properties file from container"""
-        try:
-            result = subprocess.run(
-                ['docker', 'exec', '-i', self.container_name, 'cat', '/data/server.properties'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if result.returncode == 0:
-                properties = {}
-                for line in result.stdout.split('\n'):
-                    line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, value = line.split('=', 1)
-                        properties[key.strip()] = value.strip()
-                return {'success': True, 'properties': properties}
-            else:
-                return {'success': False, 'error': 'Failed to read server.properties'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def update_server_properties(self, properties):
-        """Update server.properties file in container"""
-        try:
-            # First, read the current file
-            read_result = subprocess.run(
-                ['docker', 'exec', '-i', self.container_name, 'cat', '/data/server.properties'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if read_result.returncode != 0:
-                return {'success': False, 'error': 'Failed to read current properties'}
-
-            # Update the properties
-            lines = read_result.stdout.split('\n')
-            updated_lines = []
-            updated_keys = set()
-
-            for line in lines:
-                stripped = line.strip()
-                if stripped and not stripped.startswith('#') and '=' in stripped:
-                    key = stripped.split('=', 1)[0].strip()
-                    if key in properties:
-                        updated_lines.append(f"{key}={properties[key]}")
-                        updated_keys.add(key)
-                    else:
-                        updated_lines.append(line)
-                else:
-                    updated_lines.append(line)
-
-            # Add any new properties
-            for key, value in properties.items():
-                if key not in updated_keys:
-                    updated_lines.append(f"{key}={value}")
-
-            # Write back to container
-            properties_content = '\n'.join(updated_lines)
-            write_result = subprocess.run(
-                ['docker', 'exec', '-i', self.container_name, 'sh', '-c',
-                 f'cat > /data/server.properties'],
-                input=properties_content,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if write_result.returncode == 0:
-                return {'success': True, 'message': 'Server properties updated. Restart server for changes to take effect.'}
-            else:
-                return {'success': False, 'error': f'Failed to write: {write_result.stderr}'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def get_whitelist(self):
-        """Read allowlist.json from container (Bedrock uses allowlist not whitelist)"""
-        try:
-            import json
-            result = subprocess.run(
-                ['docker', 'exec', '-i', self.container_name, 'cat', '/data/allowlist.json'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if result.returncode == 0:
-                try:
-                    whitelist = json.loads(result.stdout)
-                    return {'success': True, 'whitelist': whitelist}
-                except json.JSONDecodeError:
-                    return {'success': True, 'whitelist': []}
-            else:
-                return {'success': False, 'error': f'Failed to read whitelist: {result.stderr}'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def get_ops(self):
-        """Read permissions.json from container"""
-        try:
-            import json
-            result = subprocess.run(
-                ['docker', 'exec', '-i', self.container_name, 'cat', '/data/permissions.json'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if result.returncode == 0:
-                try:
-                    ops = json.loads(result.stdout)
-                    return {'success': True, 'ops': ops}
-                except json.JSONDecodeError:
-                    return {'success': True, 'ops': []}
-            else:
-                return {'success': False, 'error': f'Failed to read permissions: {result.stderr}'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def restart_container(self):
-        """Restart the Minecraft server container"""
-        try:
-            result = subprocess.run(
-                ['docker', 'restart', self.container_name],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            if result.returncode == 0:
-                return {'success': True, 'message': 'Server container restarted successfully'}
-            else:
-                return {'success': False, 'error': f'Failed to restart: {result.stderr}'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
-    def stop_container(self):
-        """Stop the Minecraft server container"""
-        try:
-            result = subprocess.run(
-                ['docker', 'stop', self.container_name],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            if result.returncode == 0:
-                return {'success': True, 'message': 'Server container stopped successfully'}
-            else:
-                return {'success': False, 'error': f'Failed to stop: {result.stderr}'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}

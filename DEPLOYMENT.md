@@ -1,151 +1,102 @@
-# Deployment Guide - Minecraft Bedrock Admin Panel
+# Deployment Guide
 
 ## Quick Deployment to QNAP
 
-### Method 1: Using the Redeploy Script (Recommended)
+### Method 1: Redeploy script (recommended)
 
-1. **SSH into your QNAP NAS:**
-   ```bash
-   ssh xtamtamx@192.168.86.82
-   ```
-
-2. **Navigate to project directory:**
-   ```bash
-   cd /path/to/minecraft-rcon-panel
-   ```
-
-3. **Run the redeploy script:**
-   ```bash
-   ./redeploy.sh
-   ```
-
-4. **Access the panel:**
-   - URL: http://192.168.86.82:41114
-   - Username: `admin`
-   - Password: `REDACTED`
-
-### Method 2: Manual Docker Commands
-
-```bash
-# SSH into QNAP
-ssh xtamtamx@192.168.86.82
-
-# Navigate to project
-cd /path/to/minecraft-rcon-panel
-
-# Build image
-docker build -t minecraft-rcon-panel:latest .
-
-# Stop and remove old container
-docker stop minecraft-rcon-panel 2>/dev/null || true
-docker rm minecraft-rcon-panel 2>/dev/null || true
-
-# Start new container
-docker run -d \
-  --name minecraft-rcon-panel \
-  --restart unless-stopped \
-  -e CONTAINER_NAME="minecraft-bedrock-server" \
-  -e SERVER_HOST="192.168.86.149" \
-  -e SSH_HOST="192.168.86.82" \
-  -e SSH_USER="xtamtamx" \
-  -e ADMIN_USER="admin" \
-  -e ADMIN_PASS="REDACTED" \
-  -e SECRET_KEY="your-secret-key-change-this" \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v ~/.ssh/minecraft_panel_rsa:/root/.ssh/minecraft_panel_rsa:ro \
-  -v ~/.ssh/minecraft_panel_rsa.pub:/root/.ssh/minecraft_panel_rsa.pub:ro \
-  -p 41114:5000 \
-  minecraft-rcon-panel:latest
+```sh
+ssh <user>@<qnap-host>
+cd /share/Container/minecraft-rcon-panel
+./redeploy.sh
 ```
 
-## Updating After Code Changes
+Access at `http://<qnap-host>:41114` with the credentials configured in your
+`.env`.
 
-1. **Copy files to QNAP** (from your Mac):
-   ```bash
-   # From your Mac in the project directory
-   scp -r ./* xtamtamx@192.168.86.82:/path/to/minecraft-rcon-panel/
-   ```
+### Method 2: Manual docker run
 
-2. **Redeploy on QNAP:**
-   ```bash
-   ssh xtamtamx@192.168.86.82
-   cd /path/to/minecraft-rcon-panel
-   ./redeploy.sh
-   ```
+```sh
+# Build on a host with Docker Desktop (QNAP Container Station can't build),
+# save, pipe to QNAP, load, and run.
 
-## Verifying Deployment
+docker build --platform linux/amd64 -t minecraft-rcon-panel:latest .
 
-### Check Container Status
-```bash
-docker ps | grep minecraft-rcon-panel
+docker save minecraft-rcon-panel:latest \
+  | ssh <user>@<qnap-host> 'docker load'
+
+ssh <user>@<qnap-host> '
+  docker rm -f minecraft-rcon-panel 2>/dev/null
+  docker run -d \
+    --name minecraft-rcon-panel \
+    --restart unless-stopped \
+    --env-file /share/Container/minecraft-rcon-panel/.env \
+    -v ~/.ssh/minecraft_panel_rsa:/home/app/.ssh/minecraft_panel_rsa:ro \
+    -v ~/.ssh/minecraft_panel_rsa.pub:/home/app/.ssh/minecraft_panel_rsa.pub:ro \
+    -v /share/Container/minecraft-rcon-panel/data:/app/data \
+    -p 41114:5000 \
+    minecraft-rcon-panel:latest
+'
 ```
 
-### View Logs
-```bash
-docker logs -f minecraft-rcon-panel
+The `.env` file (untracked) on the QNAP holds `ADMIN_USER`, `ADMIN_PASS`,
+`SECRET_KEY`, `CONTAINER_NAME`, `SERVER_HOST`, `SSH_HOST`, `SSH_USER`. See
+`.env.example` for the schema.
+
+The container no longer mounts `/var/run/docker.sock` — all control happens via
+SSH. The container runs as a non-root user (`app`); SSH keys are mounted into
+`/home/app/.ssh/`, not `/root/.ssh/`.
+
+## Updating after code changes
+
+```sh
+# Build locally, ship, redeploy
+docker build --platform linux/amd64 -t minecraft-rcon-panel:latest .
+docker save minecraft-rcon-panel:latest \
+  | ssh <user>@<qnap-host> 'docker load'
+ssh <user>@<qnap-host> 'docker restart minecraft-rcon-panel'
 ```
 
-### Test Connection
-1. Visit: http://192.168.86.82:41114/api/debug-env
-2. Should show environment variables (remove this endpoint in production!)
+## Verify
+
+```sh
+ssh <user>@<qnap-host> 'docker ps | grep minecraft-rcon-panel'
+ssh <user>@<qnap-host> 'docker logs -f minecraft-rcon-panel'
+curl -sIo /dev/null -w "%{http_code}\n" http://<qnap-host>:41114/login
+```
 
 ## Troubleshooting
 
-### Login Issues
-- Verify credentials in `.env` file
-- Check logs: `docker logs minecraft-rcon-panel`
-- Visit debug endpoint: http://192.168.86.82:41114/api/debug-env
+- **Login fails** — verify `ADMIN_USER`/`ADMIN_PASS` in `.env`; on first run the
+  config wizard at `/setup` lets you set them via UI.
+- **"Server unreachable"** — confirm `SERVER_HOST` and `CONTAINER_NAME` match
+  the bedrock server's actual host and container name; `ssh <SSH_USER>@<SSH_HOST>
+  docker ps` should list it.
+- **SSH key permission errors** — `chmod 600 ~/.ssh/minecraft_panel_rsa` on the
+  QNAP; inside the container the key must be readable by the `app` user.
 
-### Server Connection Issues
-- Verify Bedrock server is running: `docker ps | grep bedrock`
-- Check SERVER_HOST is correct: `192.168.86.149`
-- Verify container name matches: `minecraft-bedrock-server`
-- Check SSH key exists: `ls ~/.ssh/minecraft_panel_rsa`
+## Security
 
-### Permission Issues
-- Ensure Docker socket is accessible: `ls -la /var/run/docker.sock`
-- Verify SSH key permissions: `chmod 600 ~/.ssh/minecraft_panel_rsa`
+- `SECRET_KEY` is auto-generated on first run and stored in
+  `data/server_config.json`. If you must override via `.env`, generate with
+  `python -c "import secrets; print(secrets.token_hex(32))"`.
+- The panel is intended to sit behind a reverse proxy (nginx or Cloudflare
+  Tunnel + Zero Trust Access). Do not expose port 41114 to the internet
+  directly.
+- Brute-force protection: `Flask-Limiter` caps login attempts to 5/min per IP.
 
-## Configuration Files
+## Ports
 
-### .env File Location
-`/path/to/minecraft-rcon-panel/.env`
+| Port  | Use                                  |
+| ----- | ------------------------------------ |
+| 41114 | Admin panel HTTP                     |
+| 19132 | Bedrock game port (UDP)              |
+| 22    | SSH (the panel SSHs into the host)   |
 
-### Important Settings
-- `SERVER_HOST` - Where Bedrock server is accessible (192.168.86.149)
-- `SSH_HOST` - Where to SSH for Docker commands (192.168.86.82)
-- `CONTAINER_NAME` - Docker container name (minecraft-bedrock-server)
-- `ADMIN_USER` / `ADMIN_PASS` - Panel login credentials
+## Restart server after config changes
 
-## Security Notes
+Edits to `server.properties` (seed, difficulty, etc.) need a bedrock-server
+restart to take effect:
 
-1. **Remove Debug Endpoint** in production:
-   - Edit `app.py` and remove the `/api/debug-env` route
-
-2. **Change SECRET_KEY**:
-   - Generate a secure random key
-   - Update in `.env` file
-
-3. **Firewall**:
-   - Ensure port 41114 is only accessible from trusted networks
-   - Consider using QNAP's reverse proxy with SSL
-
-## Port Information
-
-- **41114** - Admin panel web interface
-- **19132** - Bedrock server game port (UDP)
-- **22** - SSH for Docker commands
-
-## Restart Server for Settings Changes
-
-When you change server.properties (seed, difficulty, etc.), you must restart the Bedrock server:
-
-```bash
-# SSH into QNAP
-ssh xtamtamx@192.168.86.82
-
-# Restart Bedrock server container
-docker restart minecraft-bedrock-server
+```sh
+ssh <user>@<qnap-host> 'docker restart minecraft-bedrock-server'
 ```
-
-Or use Container Station GUI to restart the Bedrock container.

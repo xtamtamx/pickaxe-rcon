@@ -1,0 +1,45 @@
+.git
+.gitignore
+.dockerignore
+.env
+.env.example
+.env.local
+*.example
+
+__pycache__
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+
+.DS_Store
+*.swp
+*.swo
+
+# Local-only credentials/scripts excluded from image build.
+data/
+*.pem
+*.key
+*_rsa
+*_rsa.pub
+
+# Big stuff we don't need at runtime.
+screenshots/
+*.png
+*.webp
+README*.md
+DEPLOYMENT.md
+SECURITY.md
+TROUBLESHOOTING.md
+QUICK_START.md
+CLOUDFLARE_SETUP.md
+LICENSE
+
+# Dev scripts.
+redeploy*.sh
+update-and-deploy*.sh
+publish-docker.sh
+setup-*.sh
+run-on-qnap.sh
+start-minecraft-qnap.sh

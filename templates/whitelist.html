@@ -182,7 +182,7 @@ function removePlayer(playerName) {
 function toggleWhitelist(enable) {
     const action = enable ? 'whitelist_on' : 'whitelist_off';
 
-    fetch(`/api/quick/${action}`)
+    fetch(`/api/quick/${action}`, { method: 'POST' })
         .then(response => response.json())
         .then(data => {
             if (data.success) {

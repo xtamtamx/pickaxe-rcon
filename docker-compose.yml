@@ -1,27 +1,20 @@
-version: '3'
-
 services:
   rcon-panel:
     build: .
+    image: minecraft-rcon-panel:latest
     container_name: minecraft-rcon-panel
-    environment:
-      - CONTAINER_NAME=${CONTAINER_NAME}
-      - SERVER_HOST=${SERVER_HOST}
-      - SSH_HOST=${SSH_HOST}
-      - SSH_USER=${SSH_USER}
-      - ADMIN_USER=${ADMIN_USER}
-      - ADMIN_PASS=${ADMIN_PASS}
-      - SECRET_KEY=${SECRET_KEY}
+    restart: unless-stopped
+    env_file: .env
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ~/.ssh/minecraft_panel_rsa:/root/.ssh/minecraft_panel_rsa:ro
-      - ~/.ssh/minecraft_panel_rsa.pub:/root/.ssh/minecraft_panel_rsa.pub:ro
+      # SSH key for talking to the QNAP host. The Dockerfile creates the
+      # `app` user with $HOME=/home/app; don't mount into /root any more.
+      - ~/.ssh/minecraft_panel_rsa:/home/app/.ssh/minecraft_panel_rsa:ro
+      - ~/.ssh/minecraft_panel_rsa.pub:/home/app/.ssh/minecraft_panel_rsa.pub:ro
+      # Persistent app state (auto-generated secret key, scheduled tasks).
       - ./data:/app/data
-      - ./templates:/app/templates
-      - ./static:/app/static
-      - ./app.py:/app/app.py
-      - ./bedrock_remote.py:/app/bedrock_remote.py
-      - ./scheduler.py:/app/scheduler.py
     ports:
       - "41114:5000"
-    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 256m
+    # No docker.sock — the panel controls bedrock by SSH+docker exec via
+    # the mounted key, not via a local Docker API.

@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from flask_socketio import SocketIO, emit
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from werkzeug.middleware.proxy_fix import ProxyFix
 from bedrock_simple import BedrockSimpleClient
 from bedrock_remote import BedrockRemoteClient
 from scheduler import TaskScheduler
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import re
 import json
+import shlex
 from threading import Thread
 import time
 from functools import wraps
@@ -67,32 +69,40 @@ VALID_GAMERULES = {
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# Load configuration first so we can use secure secret key
+# Honor X-Forwarded-* from the reverse proxy / Cloudflare Tunnel so request.scheme
+# reflects the public scheme. Without this, SESSION_COOKIE_SECURE drops cookies
+# when the proxy terminates TLS and the origin sees plain HTTP.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_for=1, x_host=1)
+
 config = get_config()
 
-# Use auto-generated secret key from config (falls back to env var for backwards compatibility)
-app.config['SECRET_KEY'] = config.get_secret_key() or os.getenv('SECRET_KEY', 'dev-key-change-in-production')
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for development
+# Secret key comes from the auto-generated value in server_config.json (set on
+# first run by config._ensure_security_settings). The env var only applies if
+# the config-stored key is empty.
+app.config['SECRET_KEY'] = config.get_secret_key() or os.getenv('SECRET_KEY')
+if not app.config['SECRET_KEY']:
+    raise RuntimeError(
+        "No SECRET_KEY available. Auto-generation in config.py failed and SECRET_KEY env var is unset."
+    )
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
-# =============================================================================
-# Session Cookie Security
-# =============================================================================
-app.config['SESSION_COOKIE_HTTPONLY'] = True      # Prevent JavaScript access to session cookie
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'     # CSRF mitigation - cookies sent with same-site requests
-# Note: SESSION_COOKIE_SECURE should be True in production with HTTPS
-# Set via environment variable to allow HTTP in development
-app.config['SESSION_COOKIE_SECURE'] = os.getenv('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Default to True. Set SESSION_COOKIE_SECURE=false only for local HTTP dev.
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() == 'true'
 
-# =============================================================================
-# CORS Configuration
-# =============================================================================
-# Default to same-origin only (None). Set CORS_ORIGINS env var to allow specific origins.
-# Use '*' only for development if needed.
-cors_origins = os.getenv('CORS_ORIGINS', None) or None  # None = same origin only
-if cors_origins == '*':
-    print("⚠️  WARNING: CORS_ORIGINS='*' allows any origin. Set to specific domain in production.")
-socketio = SocketIO(app, cors_allowed_origins=cors_origins if cors_origins else [])
+# SocketIO CORS: empty list / None makes flask-socketio fall back to "no
+# restriction" — explicit allow-list of same-origin scheme+host only.
+_cors_env = os.getenv('CORS_ORIGINS', '').strip()
+if _cors_env == '*':
+    print("WARNING: CORS_ORIGINS='*' allows any origin. Set to specific domain in production.")
+    socketio = SocketIO(app, cors_allowed_origins='*')
+elif _cors_env:
+    socketio = SocketIO(app, cors_allowed_origins=[o.strip() for o in _cors_env.split(',') if o.strip()])
+else:
+    # No env var → same-origin only via SocketIO's default-deny by origin check.
+    socketio = SocketIO(app, cors_allowed_origins=[])
 
 # =============================================================================
 # CSRF Protection
@@ -117,8 +127,11 @@ if LIMITER_AVAILABLE:
         default_limits=["200 per minute"],
         storage_uri="memory://"
     )
+    login_rate_limit = limiter.limit("5 per minute")
 else:
     limiter = None
+    def login_rate_limit(f):
+        return f
 
 # Login setup
 login_manager = LoginManager()
@@ -154,8 +167,12 @@ def check_setup():
 
 # Initialize Bedrock client
 def initialize_bedrock_client():
-    """Initialize or reinitialize the Bedrock client with current config"""
-    global bedrock_client, task_scheduler
+    """Initialize or reinitialize the Bedrock client with current config.
+
+    Also rebinds the scheduler's reference so any in-flight scheduled jobs
+    talk to the newly-configured client.
+    """
+    global bedrock_client
 
     server_config = config.get_server_config()
     container_name = server_config.get('container_name', 'minecraft-bedrock')
@@ -171,12 +188,15 @@ def initialize_bedrock_client():
         print("No SSH key found, using simple client (limited functionality)")
         bedrock_client = BedrockSimpleClient(server_host, container_name)
 
+    # Propagate to the scheduler if it has been constructed already.
+    try:
+        task_scheduler.set_bedrock_client(bedrock_client)
+    except NameError:
+        pass  # Scheduler not constructed yet on first initialize.
+
     return bedrock_client
 
-# Initialize client
 bedrock_client = initialize_bedrock_client()
-
-# Initialize scheduler
 task_scheduler = TaskScheduler(bedrock_client)
 task_scheduler.start()
 
@@ -279,6 +299,7 @@ def setup():
     return render_template('setup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@login_rate_limit
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -286,23 +307,17 @@ def login():
 
         admin_user = config.get('admin.username', 'admin')
 
-        # Use secure password verification
         if username == admin_user and config.verify_admin_password(password):
             user = User(username)
             login_user(user)
             return redirect(url_for('index'))
         else:
-            # Add small delay to prevent timing attacks
             time.sleep(0.5)
             return render_template('login.html', error='Invalid credentials')
 
     return render_template('login.html')
 
-# Apply rate limiting to login if available
-if LIMITER_AVAILABLE and limiter:
-    login = limiter.limit("5 per minute")(login)
-
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
@@ -439,15 +454,12 @@ def get_version():
         print(f"Failed to get version from logs: {e}")
 
     # Try to fetch latest version from official Minecraft download page
+    ssl_verify = config.get('security.ssl_verify', True)
+    ctx = ssl.create_default_context()
+    if not ssl_verify:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
     try:
-        ssl_verify = config.get('security.ssl_verify', True)
-        if ssl_verify:
-            ctx = ssl.create_default_context()
-        else:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-
         # Try the official Bedrock server download page
         req = urllib.request.Request(
             'https://www.minecraft.net/en-us/download/server/bedrock',
@@ -577,7 +589,7 @@ def toggle_scheduled_task(task_id):
     success = task_scheduler.toggle_task(task_id, enabled)
     return jsonify({'success': success})
 
-@app.route('/api/quick/<action>')
+@app.route('/api/quick/<action>', methods=['POST'])
 @login_required
 def quick_action(action):
     """Quick actions"""
@@ -610,6 +622,24 @@ def update_server_properties():
     """Update server.properties file"""
     data = request.get_json()
     properties = data.get('properties', {})
+
+    # Defense in depth: server.properties values get interpolated into shell
+    # commands downstream (e.g. `level-name` → tar/rm of the world dir). Reject
+    # any value containing shell metacharacters or newlines before we hand it off.
+    forbidden = set('\n\r"\'`$\\|<>;&()*?[]{}')
+    for key, value in properties.items():
+        if not re.match(r'^[a-z0-9\-]+$', key):
+            return jsonify({'success': False, 'error': f'Invalid property name: {key}'}), 400
+        if not isinstance(value, str):
+            value = str(value)
+        if any(ch in value for ch in forbidden):
+            return jsonify({
+                'success': False,
+                'error': f'Invalid character in value for {key}'
+            }), 400
+        if len(value) > 256:
+            return jsonify({'success': False, 'error': f'Value too long for {key}'}), 400
+        properties[key] = value
 
     result = bedrock_client.update_server_properties(properties)
     return jsonify(result)
@@ -733,8 +763,8 @@ def teleport_player():
         y = float(data.get('y', 0))
         z = float(data.get('z', 0))
 
-        # Basic sanity checks (Bedrock coordinates range)
-        if not (-30000000 <= x <= 30000000) or not (0 <= y <= 256) or not (-30000000 <= z <= 30000000):
+        # Bedrock world Y range has been -64..320 since the 1.18 height update.
+        if not (-30000000 <= x <= 30000000) or not (-64 <= y <= 320) or not (-30000000 <= z <= 30000000):
             return jsonify({'success': False, 'error': 'Coordinates out of range'})
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': 'Invalid coordinate values'})
@@ -756,8 +786,9 @@ def give_item():
     if not validate_minecraft_name(player):
         return jsonify({'success': False, 'error': 'Invalid player name (must be 3-16 alphanumeric characters)'})
 
-    # Validate item name (alphanumeric and underscore only)
-    if not re.match(r'^[a-z_]+$', item):
+    # Bedrock item IDs are lowercase a-z plus digits and underscore, e.g.
+    # `music_disc_13`, `cobblestone`, `iron_pickaxe`. Allow digits.
+    if not re.match(r'^[a-z][a-z0-9_]{0,63}$', item):
         return jsonify({'success': False, 'error': 'Invalid item name'})
 
     # Validate amount

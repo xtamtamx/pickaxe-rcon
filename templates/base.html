@@ -49,9 +49,10 @@
                 <span class="server-ip show-desktop">
                     {{ rcon_host or 'your.server.ip' }}
                 </span>
-                <button class="mc-button mc-button-red" onclick="location.href='/logout'">
-                    Logout
-                </button>
+                <form action="/logout" method="POST" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="mc-button mc-button-red">Logout</button>
+                </form>
             </div>
         </div>
     </nav>

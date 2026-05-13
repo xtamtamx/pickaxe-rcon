@@ -152,7 +152,7 @@ function sendCommand(cmd) {
 }
 
 function quickAction(action) {
-    fetch('/api/quick/' + action)
+    fetch('/api/quick/' + action, { method: 'POST' })
         .then(response => response.json())
         .then(data => {
             if (data.response) {
