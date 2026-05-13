@@ -246,24 +246,68 @@ curl http://localhost:41114
 
 ---
 
-## Security Recommendations
+## Required: Put Cloudflare Access in front of the panel
 
-Since you're exposing your admin panel to the internet:
+**Do not run this tunnel without Access.** The panel's login page is fully
+exposed to the internet via the tunnel. Without Access, anyone on the internet
+can hit `/login` and brute-force credentials (the rate limiter caps attempts
+per IP, not globally — a botnet trivially defeats it). Access enforces
+identity *before* a request ever reaches the Flask app.
 
-1. **Use a strong password** for admin login
-2. **Consider adding Cloudflare Access** (free tier) for additional authentication
-3. **Monitor the logs** regularly
-4. **Keep the admin panel updated**
+Access is free for up to 50 users in Cloudflare Zero Trust.
 
-### Optional: Add Cloudflare Access
+### Step-by-step
 
-For extra security, you can add Cloudflare Access (free for up to 50 users):
+1. Open https://one.dash.cloudflare.com → pick the account that owns the
+   tunnel's domain. (First visit asks you to create a free Zero Trust team
+   — pick a short slug; it appears in OAuth redirect URLs.)
 
-1. Go to Cloudflare Dashboard → Zero Trust
-2. Add an Access application for `admin.yourdomain.com`
-3. Require email authentication before accessing the panel
+2. **Settings → Authentication → Login methods → Add new**. Pick a provider:
+   - **One-time PIN** (built-in; emails a code) — zero setup.
+   - **Google** — most convenient if your panel logins are tied to a Gmail.
 
-This adds a second layer of authentication before anyone can even see your login page!
+3. **Access → Applications → Add an application → Self-hosted**.
+   - Application name: `pickaxe-rcon`
+   - Session duration: `24 hours` (or shorter)
+   - Application domain: `admin.yourdomain.com` (the tunnel's hostname)
+   - Click **Next**.
+
+4. Configure the policy:
+   - Policy name: `Allow Tom`
+   - Action: `Allow`
+   - Configure rules → **Include → Emails** → enter your email address(es).
+   - Click **Next**, then **Add application**.
+
+5. Test from a logged-out browser (or incognito):
+   - Visit `https://admin.yourdomain.com` — you should see the Cloudflare
+     Access challenge (not the Pickaxe login).
+   - Complete identity verification → you're now at the Pickaxe login.
+   - Wrong identity → blocked at the Cloudflare layer, panel never sees the
+     request.
+
+6. **Headers (optional but recommended)** — Application → Settings → CORS
+   off, **HTTP Only Cookie Attribute: on**, **Same Site Attribute: Strict**.
+
+### What this changes for the panel
+
+The panel still requires its own admin login on top of Access — that's
+deliberate, two layers of auth. Access prevents drive-by traffic; the
+panel's `flask-login` + bcrypt session is the second factor for an
+authenticated Cloudflare identity.
+
+### Bypass for service accounts (if you ever need one)
+
+If you script the panel from another tool, you can add a **Service Token**
+policy: `Access → Service Auth → Service Tokens → Create`. Send the
+`CF-Access-Client-Id` and `CF-Access-Client-Secret` headers on requests.
+Don't enable this until you actually need it.
+
+## Operational notes
+
+- **Monitor the logs** regularly: `sudo journalctl -u cloudflared -f` on
+  the QNAP, plus the Access logs in Cloudflare Zero Trust → Logs.
+- **Rotate the admin password** if you ever suspect compromise.
+- **Keep the panel updated** — rebuild and redeploy after pulling from main.
 
 ---
 
