@@ -24,6 +24,11 @@ SAFE_COMMANDS = frozenset({
 # (which would corrupt the FIFO write) and enforce the command allowlist.
 _FIRST_TOKEN = re.compile(r'^(\S+)')
 
+# Player target selectors: @a (all players), @p (nearest), @r (random).
+# A scheduled command using one of these does nothing useful when the server
+# is empty — running it just spams "No targets matched selector" in the log.
+_PLAYER_SELECTOR = re.compile(r'@[apr](?![a-z])')
+
 class TaskScheduler:
     def __init__(self, bedrock_client):
         # Single worker so the bedrock send-command FIFO is hit serially.
@@ -80,23 +85,45 @@ class TaskScheduler:
             return False
         return m.group(1).lower() in SAFE_COMMANDS
 
+    def _players_online(self):
+        """Best-effort online-player check.
+
+        On any error / indeterminate result, returns True so a transient SSH
+        failure never silently drops a legitimate task.
+        """
+        try:
+            result = self.bedrock_client.get_online_players()
+        except Exception as e:
+            print(f"[Scheduler] player check failed ({e}); assuming players online")
+            return True
+        if not result or not result.get('success'):
+            return True
+        return bool(result.get('players'))
+
     def _execute_task(self, task_id):
         """Execute a scheduled task"""
         task = self.tasks.get(task_id)
         if not task:
             return
 
-        print(f"[Scheduler] Executing task: {task['name']}")
-
-        # Execute the command(s)
         command = task['command']
 
         # Check for special @backup action
         if command.strip().lower() == '@backup':
+            print(f"[Scheduler] Executing task: {task['name']}")
             self._execute_backup(task)
             task['last_run'] = datetime.now().isoformat()
             self.save_tasks()
             return
+
+        # A command that targets players (@a/@p/@r — e.g. the Welcome Kit's
+        # `give @a[tag=!welcomed] ...`) does nothing on an empty server and
+        # just spams "No targets matched selector". Skip it when nobody's on.
+        if _PLAYER_SELECTOR.search(command) and not self._players_online():
+            print(f"[Scheduler] Skipping '{task['name']}': no players online")
+            return
+
+        print(f"[Scheduler] Executing task: {task['name']}")
 
         # Support multiple commands separated by ' && '
         if ' && ' in command:
